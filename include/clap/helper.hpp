@@ -6,6 +6,9 @@
 #include <clap/parser.hpp>
 
 namespace clap {
+///
+/// \brief Command line arguments help text interpreter
+///
 template <typename Ch = char>
 class basic_helper;
 
@@ -22,15 +25,32 @@ class basic_helper : public basic_parser<Ch> {
 	using typename basic_parser<char_t>::option_t;
 	using typename basic_parser<char_t>::expr_t;
 
+	///
+	/// \brief Enum encoding whether app should continue or (successfully) exit
+	///
 	enum class result { resume, quit };
-
+	///
+	/// \brief Null character
+	///
 	inline static constexpr char_t null_char{};
 
+	///
+	/// \brief Input specification
+	///
 	struct spec_t;
+	///
+	/// \brief Customization point for printing
+	///
 	class printer_t;
 
+	///
+	/// \brief Check if str matches option with id
+	///
 	static bool option_match(string_view_t id, bool single, string_view_t str) noexcept;
 
+	///
+	/// \brief Interpret expr with respect to spec, print help text if necessary
+	///
 	template <typename Pr = printer_t>
 	result interpret(ostream_t& out, spec_t spec, expr_t const& expr) const;
 
@@ -40,24 +60,57 @@ class basic_helper : public basic_parser<Ch> {
 
 template <typename Ch>
 struct basic_helper<Ch>::spec_t {
+	///
+	/// \brief Option structure
+	///
 	struct opt_t {
+		///
+		/// \brief Full word id of option
+		///
 		string_t id;
+		///
+		/// \brief Description text
+		///
 		string_t description;
+		///
+		/// \brief Value format (optional)
+		///
 		string_t value_fmt;
+		///
+		/// \brief Internal usage
+		///
 		mutable char_t single = null_char;
 	};
-
+	///
+	/// \brief Parameters structure
+	///
 	struct params_t {
-		string_t arg_fmt;
+		///
+		/// \brief Arguments format
+		///
+		string_t args_fmt;
 		std::vector<opt_t> options;
 	};
-
+	///
+	/// \brief Command structure
+	///
 	struct cmd_t : params_t {
+		///
+		/// \brief Description text
+		///
 		string_t description;
 	};
-
+	///
+	/// \brief Main structure
+	///
 	struct main_t : params_t {
+		///
+		/// \brief Name of executable (optional)
+		///
 		string_t exe;
+		///
+		/// \brief Application version (optional)
+		///
 		string_t version;
 	};
 
@@ -72,6 +125,7 @@ struct basic_helper<Ch>::spec_t {
 
 template <typename Ch>
 class basic_helper<Ch>::printer_t {
+	// Interface
   public:
 	using cmd_t = typename spec_t::cmd_t;
 
@@ -83,15 +137,18 @@ class basic_helper<Ch>::printer_t {
 	void operator()(spec_t const& spec) const;
 	void operator()(string_view_t main, string_view_t id, cmd_t const& cmd) const;
 
+	// Convenience
+  public:
 	void print(expr_t const& expr, result const* result = nullptr) const;
 
+	// Impl
   private:
 	struct stream;
 	inline static constexpr std::size_t indent = 4;
 
 	void commands(stream& out, typename spec_t::cmd_map_t const& commands) const;
 	void options(stream& out, std::vector<typename spec_t::opt_t> const& options) const;
-	void arguments(stream& out, string_view_t arg_fmt) const;
+	void arguments(stream& out, string_view_t args_fmt) const;
 
 	template <typename T, typename F>
 	static void printerate(stream& out, std::vector<T> const& vec, string_view_t title, F f);
@@ -146,7 +203,7 @@ void basic_helper<Ch>::printer_t::operator()(spec_t const& spec) const {
 	str << "[OPTIONS...] [COMMAND] [ARGS...]\n";
 	options(str, spec.main.options);
 	commands(str, spec.commands);
-	arguments(str, spec.main.arg_fmt);
+	arguments(str, spec.main.args_fmt);
 }
 
 template <typename Ch>
@@ -158,7 +215,7 @@ void basic_helper<Ch>::printer_t::operator()(string_view_t main, string_view_t i
 	}
 	str << id << " [OPTIONS...] [ARGS...]\n\nDESCRIPTION\n  " << (cmd.description.empty() ? "[None]" : cmd.description) << '\n';
 	options(str, cmd.options);
-	arguments(str, cmd.arg_fmt);
+	arguments(str, cmd.args_fmt);
 }
 
 template <typename Ch>
@@ -223,19 +280,18 @@ void basic_helper<Ch>::printer_t::options(stream& out, std::vector<typename spec
 }
 
 template <typename Ch>
-void basic_helper<Ch>::printer_t::arguments(stream& out, string_view_t arg_fmt) const {
-	if (!arg_fmt.empty()) {
-		out << "\nARGUMENTS\n  " << arg_fmt << '\n';
+void basic_helper<Ch>::printer_t::arguments(stream& out, string_view_t args_fmt) const {
+	if (!args_fmt.empty()) {
+		out << "\nARGUMENTS\n  " << args_fmt << '\n';
 	}
 }
 
 template <typename Ch>
 template <typename T, typename F>
 void basic_helper<Ch>::printer_t::printerate(stream& str, std::vector<T> const& vec, string_view_t title, F f) {
-	bool first = true;
 	if (!vec.empty()) {
 		str << "\n" << title << "\t: ";
-		first = true;
+		bool first = true;
 		for (auto const& t : vec) {
 			if (!first) {
 				str << ',';

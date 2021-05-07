@@ -3,6 +3,9 @@
 #include <vector>
 
 namespace clap {
+///
+/// \brief Command line arguments parser
+///
 template <typename Ch = char>
 class basic_parser;
 
@@ -14,26 +17,50 @@ class basic_parser {
 	using char_t = Ch;
 	using string_t = std::basic_string<char_t>;
 	using string_view_t = std::basic_string_view<char_t>;
-
+	///
+	/// \brief Option structure
+	///
 	struct option_t {
+		///
+		/// \brief Word / letter identifying option
+		///
 		string_t id;
+		///
+		/// \brief Value for option (if any)
+		///
 		string_t value;
 	};
-
+	///
+	/// \brief Command structure
+	///
 	struct command_t {
+		///
+		/// \brief Word / letter identifying command
+		///
 		string_t id;
 		std::vector<option_t> options;
 	};
-
+	///
+	/// \brief Expression structure
+	///
 	struct expr_t {
 		command_t command;
 		std::vector<option_t> options;
 		std::vector<string_t> arguments;
 	};
 
+	///
+	/// \brief Parse a container of string-like objects
+	///
 	template <typename C>
 	expr_t parse(C const& input, std::size_t start);
+	///
+	/// \brief Parse a vector of C strings
+	///
 	expr_t parse(std::vector<char_t const*> const& input, std::size_t start);
+	///
+	/// \brief Parse raw args
+	///
 	expr_t parse(int argc, char_t const* const argv[], int start = 1);
 
   private:
@@ -44,8 +71,8 @@ class basic_parser {
 
 	struct {
 		expr_t expr;
-		state state_;
-		option_t* prev;
+		state state_{};
+		option_t* prev{};
 		int idx;
 	} m_data;
 };
