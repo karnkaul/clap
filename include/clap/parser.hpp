@@ -64,7 +64,7 @@ class basic_parser {
 	expr_t parse(int argc, char_t const* const argv[], int start = 1);
 
   private:
-	enum class state { start, cmd, opts, args };
+	enum class state { start, cmd, args };
 
 	void next(int argc, char_t const* const argv[]);
 	void options(char_t const* const argv[]);
@@ -74,7 +74,7 @@ class basic_parser {
 		state state_{};
 		option_t* prev{};
 		int idx;
-	} m_data;
+	} m_data = {};
 };
 
 // impl
@@ -116,8 +116,8 @@ void basic_parser<Ch>::options(char_t const* const argv[]) {
 		}
 		if (!str.empty() && m_data.prev) {
 			m_data.prev->value = str.substr(1);
+			m_data.prev = {};
 		}
-		m_data.prev = {};
 	}
 }
 
@@ -129,9 +129,8 @@ void basic_parser<Ch>::next(int argc, char_t const* const argv[]) {
 		} else {
 			if (str[0] == '-') {
 				options(argv);
-				m_data.state_ = state::opts;
 			} else {
-				if (m_data.state_ == state::opts && m_data.prev) {
+				if (m_data.prev) {
 					m_data.prev->value = str;
 					m_data.prev = {};
 				} else if (m_data.expr.command.id.empty()) {
@@ -152,8 +151,10 @@ void basic_parser<Ch>::next(int argc, char_t const* const argv[]) {
 template <typename Ch>
 typename basic_parser<Ch>::expr_t basic_parser<Ch>::parse(int argc, char_t const* const argv[], int start) {
 	m_data = {};
-	m_data.idx = start;
-	next(argc, argv);
+	if (start < argc) {
+		m_data.idx = start;
+		next(argc, argv);
+	}
 	return std::move(m_data.expr);
 }
 } // namespace clap
