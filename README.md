@@ -65,10 +65,6 @@ clapp ^^
 $ ./clapp fib -s -a=1 -b=2 5
 5th Fibonacci number (1, 2): 1 2 3 5 8
 clapp ^^
-
-$ ./clapp fib -sa 1 -b 2 5
-5th Fibonacci number (1, 2): 1 2 3 5 8
-clapp ^^
 ```
 
 ### Usage
@@ -95,7 +91,7 @@ Takes in raw arguments and returns a schema of `expr_t`.
 [MAIN_OPTS...] [COMMAND] [CMD_OPTS...] [ARGUMENTS...]
 ```
 
-All parameters are optional. Options are prefixed with `-` (single letter, supports chaining) or `--` (full word), and can take values separated by `=` or space. Arguments are collected verbatim.
+All parameters are optional. Options are prefixed with `-` (single letter, supports chaining) or `--` (full word), and can take values separated by `=`. Arguments are collected verbatim.
 
 **Expression Schema**
 

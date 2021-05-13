@@ -72,7 +72,6 @@ class basic_parser {
 	struct {
 		expr_t expr;
 		state state_{};
-		option_t* prev{};
 		int idx;
 	} m_data = {};
 };
@@ -105,18 +104,17 @@ void basic_parser<Ch>::options(char_t const* const argv[]) {
 			vec.push_back({string_t(str.substr(2, eq - 2)), string_t(str.substr(eq + 1))});
 		} else {
 			vec.push_back({string_t(str.substr(2)), {}});
-			m_data.prev = &vec.back();
 		}
 	} else {
 		str = str.substr(1);
+		option_t* last = {};
 		while (!str.empty() && str[0] != '=') {
 			vec.push_back({string_t(str.substr(0, 1)), {}});
 			str = str.substr(1);
-			m_data.prev = &vec.back();
+			last = &vec.back();
 		}
-		if (!str.empty() && m_data.prev) {
-			m_data.prev->value = str.substr(1);
-			m_data.prev = {};
+		if (!str.empty() && last) {
+			last->value = str.substr(1);
 		}
 	}
 }
@@ -130,10 +128,7 @@ void basic_parser<Ch>::next(int argc, char_t const* const argv[]) {
 			if (str[0] == '-') {
 				options(argv);
 			} else {
-				if (m_data.prev) {
-					m_data.prev->value = str;
-					m_data.prev = {};
-				} else if (m_data.expr.command.id.empty()) {
+				if (m_data.expr.command.id.empty()) {
 					m_data.expr.command.id = str;
 					m_data.state_ = state::cmd;
 				} else {

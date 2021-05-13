@@ -73,7 +73,7 @@ struct basic_interpreter<Ch>::params_t {
 	///
 	/// \brief Matched option
 	///
-	struct opt_t : option_t {
+	struct opt_t : basic_parser<char_t>::option_t {
 		///
 		/// \brief Whether match was a single character
 		///
