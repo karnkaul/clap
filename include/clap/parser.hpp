@@ -63,6 +63,11 @@ class basic_parser {
 	///
 	expr_t parse(int argc, char_t const* const argv[], int start = 1);
 
+	///
+	/// \brief Whether to parse first non-option as a command (otherwise argument)
+	///
+	bool m_command = true;
+
   private:
 	enum class state { start, cmd, args };
 
@@ -128,7 +133,7 @@ void basic_parser<Ch>::next(int argc, char_t const* const argv[]) {
 			if (str[0] == '-') {
 				options(argv);
 			} else {
-				if (m_data.expr.command.id.empty()) {
+				if (m_command && m_data.expr.command.id.empty()) {
 					m_data.expr.command.id = str;
 					m_data.state_ = state::cmd;
 				} else {

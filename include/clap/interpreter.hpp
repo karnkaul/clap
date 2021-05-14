@@ -256,7 +256,11 @@ void basic_interpreter<Ch>::printer_t::operator()(spec_t const& spec) const {
 	if (!spec.main.exe.empty()) {
 		str << spec.main.exe << ' ';
 	}
-	str << "[OPTIONS...] [COMMAND] [ARGS...]\n";
+	str << "[OPTIONS...] ";
+	if (!spec.commands.empty()) {
+		str << "[COMMAND] ";
+	}
+	str << "[ARGS...]\n";
 	options(str, spec.main.options);
 	commands(str, spec.commands);
 	arguments(str, spec.main.args_fmt);
