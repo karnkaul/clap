@@ -4,9 +4,7 @@
 #include <clap/interpreter.hpp>
 
 int fib(int a, int b, int n, bool print) {
-	if (print) {
-		std::cout << a << ' ';
-	}
+	if (print) { std::cout << a << ' '; }
 	return n > 0 ? fib(b, a + b, n - 1, print) : b;
 }
 
@@ -31,9 +29,7 @@ int main(int argc, char* argv[]) {
 	spec.main.options.push_back(opt_hi);   // add option to main (global)
 	// set main (global) callback
 	spec.main.callback = [&opt_hi](clap::interpreter::params_t const& p) {
-		if (p.opt_value(opt_hi.id)) {
-			std::cout << "hi!" << std::endl;
-		}
+		if (p.opt_value(opt_hi.id)) { std::cout << "hi!" << std::endl; }
 	};
 
 	clap::interpreter::spec_t::cmd_t fib_cmd;			// construct new command

@@ -88,9 +88,7 @@ template <typename C>
 typename basic_parser<Ch>::expr_t basic_parser<Ch>::parse(C const& input, std::size_t start) {
 	std::vector<char_t const*> vec;
 	vec.reserve(input.size());
-	for (auto const& str : input) {
-		vec.push_back(str.data());
-	}
+	for (auto const& str : input) { vec.push_back(str.data()); }
 	return parse(vec, start);
 }
 
@@ -118,9 +116,7 @@ void basic_parser<Ch>::options(char_t const* const argv[]) {
 			str = str.substr(1);
 			last = &vec.back();
 		}
-		if (!str.empty() && last) {
-			last->value = str.substr(1);
-		}
+		if (!str.empty() && last) { last->value = str.substr(1); }
 	}
 }
 
@@ -143,9 +139,7 @@ void basic_parser<Ch>::next(int argc, char_t const* const argv[]) {
 			}
 		}
 	}
-	if (++m_data.idx < argc) {
-		next(argc, argv);
-	}
+	if (++m_data.idx < argc) { next(argc, argv); }
 }
 
 template <typename Ch>

@@ -209,20 +209,15 @@ class basic_interpreter<Ch>::printer_t {
 template <typename Ch>
 typename basic_interpreter<Ch>::string_t const* basic_interpreter<Ch>::params_t::opt_value(string_view_t id) const noexcept {
 	for (auto const& opt : options) {
-		if (opt.id == id || (opt.single && opt.id[0] == id[0])) {
-			return &opt.value;
-		}
+		if (opt.id == id || (opt.single && opt.id[0] == id[0])) { return &opt.value; }
 	}
 	return nullptr;
 }
 
 template <typename Ch>
 struct basic_interpreter<Ch>::printer_t::stream : std::basic_stringstream<Ch> {
-	explicit stream(ostream_t* out) : out(out) {
-	}
-	~stream() {
-		(*out) << this->rdbuf() << std::endl;
-	}
+	explicit stream(ostream_t* out) : out(out) {}
+	~stream() { (*out) << this->rdbuf() << std::endl; }
 
   private:
 	ostream_t* out;
@@ -253,13 +248,9 @@ template <typename Ch>
 void basic_interpreter<Ch>::printer_t::operator()(spec_t const& spec) const {
 	stream str(m_out);
 	str << "\nUsage: ";
-	if (!spec.main.exe.empty()) {
-		str << spec.main.exe << ' ';
-	}
+	if (!spec.main.exe.empty()) { str << spec.main.exe << ' '; }
 	str << "[OPTIONS...] ";
-	if (!spec.commands.empty()) {
-		str << "[COMMAND] ";
-	}
+	if (!spec.commands.empty()) { str << "[COMMAND] "; }
 	str << "[ARGS...]\n";
 	options(str, spec.main.options);
 	commands(str, spec.commands);
@@ -270,9 +261,7 @@ template <typename Ch>
 void basic_interpreter<Ch>::printer_t::operator()(string_view_t main, string_view_t id, typename spec_t::cmd_t const& cmd) const {
 	stream str(m_out);
 	str << "\nUsage: ";
-	if (!main.empty()) {
-		str << main << ' ';
-	}
+	if (!main.empty()) { str << main << ' '; }
 	str << id << " [OPTIONS...] [ARGS...]\n\nDESCRIPTION\n  " << (cmd.description.empty() ? "[None]" : cmd.description) << '\n';
 	options(str, cmd.options);
 	arguments(str, cmd.args_fmt);
@@ -282,22 +271,16 @@ template <typename Ch>
 void basic_interpreter<Ch>::printer_t::print(expr_t const& expr, result const* result) const {
 	stream str(m_out);
 	str << "expression:";
-	if (result) {
-		str << "\n  result\t: " << (*result == result::quit ? "quit" : "resume");
-	}
+	if (result) { str << "\n  result\t: " << (*result == result::quit ? "quit" : "resume"); }
 	printerate(str, expr.options, "  options", [&str](auto const& op) {
 		str << op.id;
-		if (!op.value.empty()) {
-			str << '=' << op.value;
-		}
+		if (!op.value.empty()) { str << '=' << op.value; }
 	});
 	if (!expr.command.id.empty()) {
 		str << "\n  command\t: " << expr.command.id;
 		printerate(str, expr.command.options, "    options", [&str](auto const& op) {
 			str << op.id;
-			if (!op.value.empty()) {
-				str << '=' << op.value;
-			}
+			if (!op.value.empty()) { str << '=' << op.value; }
 		});
 	}
 	printerate(str, expr.arguments, "  arguments", [&str](auto const& arg) { str << arg; });
@@ -309,9 +292,7 @@ void basic_interpreter<Ch>::printer_t::commands(stream& out, typename spec_t::cm
 		out << "\nCOMMANDS\n";
 		std::vector<string_view_t> cmds;
 		cmds.reserve(commands.size());
-		for (auto const& [id, _] : commands) {
-			cmds.push_back(id);
-		}
+		for (auto const& [id, _] : commands) { cmds.push_back(id); }
 		printerate(out, cmds, [&commands](auto, auto const& id) { return commands.find(string_t(id))->second.description; });
 	}
 }
@@ -330,9 +311,7 @@ void basic_interpreter<Ch>::printer_t::options(stream& out, std::vector<typename
 				option << std::setw(6);
 			}
 			option << "--" << opt.id;
-			if (!opt.value_fmt.empty()) {
-				option << '=' << opt.value_fmt;
-			}
+			if (!opt.value_fmt.empty()) { option << '=' << opt.value_fmt; }
 			opts.push_back(option.str());
 		}
 		printerate(out, opts, [&options](auto idx, auto const&) { return options[idx].description; });
@@ -341,9 +320,7 @@ void basic_interpreter<Ch>::printer_t::options(stream& out, std::vector<typename
 
 template <typename Ch>
 void basic_interpreter<Ch>::printer_t::arguments(stream& out, string_view_t args_fmt) const {
-	if (!args_fmt.empty()) {
-		out << "\nARGUMENTS\n  " << args_fmt << '\n';
-	}
+	if (!args_fmt.empty()) { out << "\nARGUMENTS\n  " << args_fmt << '\n'; }
 }
 
 template <typename Ch>
@@ -353,9 +330,7 @@ void basic_interpreter<Ch>::printer_t::printerate(stream& str, std::vector<T> co
 		str << "\n" << title << "\t: ";
 		bool first = true;
 		for (auto const& t : vec) {
-			if (!first) {
-				str << ',';
-			}
+			if (!first) { str << ','; }
 			first = false;
 			f(t);
 		}
@@ -381,9 +356,7 @@ template <typename Cont>
 std::size_t basic_interpreter<Ch>::spec_t::max_length(Cont const& strings) noexcept {
 	std::size_t ret = 0;
 	for (auto const& str : strings) {
-		if (str.size() > ret) {
-			ret = str.size();
-		}
+		if (str.size() > ret) { ret = str.size(); }
 	}
 	return ret;
 }
@@ -391,9 +364,7 @@ std::size_t basic_interpreter<Ch>::spec_t::max_length(Cont const& strings) noexc
 template <typename Ch>
 typename basic_interpreter<Ch>::spec_t::opt_t const* basic_interpreter<Ch>::spec_t::find(cvec<typename spec_t::opt_t> opts, string_view_t str) noexcept {
 	for (opt_t const& opt : opts) {
-		if (option_match(opt.id, opt.single != null_char, str)) {
-			return &opt;
-		}
+		if (option_match(opt.id, opt.single != null_char, str)) { return &opt; }
 	}
 	return nullptr;
 }
@@ -453,9 +424,7 @@ typename basic_interpreter<Ch>::result basic_interpreter<Ch>::interpret(ostream_
 			env.options.push_back(std::move(match));
 		}
 	}
-	if (spec.main.callback) {
-		spec.main.callback(env);
-	}
+	if (spec.main.callback) { spec.main.callback(env); }
 	if (cmd && cmd->callback) {
 		env.options = std::move(cmd_opts);
 		cmd->callback(env);
@@ -467,14 +436,10 @@ template <typename Ch>
 void basic_interpreter<Ch>::fill_opts(cvec<typename spec_t::opt_t> out_options) {
 	std::unordered_map<char_t, int> firsts;
 	for (auto const& opt : out_options) {
-		if (!opt.id.empty() && opt.id[0] != null_char) {
-			++firsts[opt.id[0]];
-		}
+		if (!opt.id.empty() && opt.id[0] != null_char) { ++firsts[opt.id[0]]; }
 	}
 	for (auto const& opt : out_options) {
-		if (!opt.id.empty() && opt.force_single != force::off && (opt.force_single == force::on || firsts[opt.id[0]] == 1)) {
-			opt.single = opt.id[0];
-		}
+		if (!opt.id.empty() && opt.force_single != force::off && (opt.force_single == force::on || firsts[opt.id[0]] == 1)) { opt.single = opt.id[0]; }
 	}
 }
 
