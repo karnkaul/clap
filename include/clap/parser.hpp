@@ -1,5 +1,6 @@
 #pragma once
 #include <string>
+#include <type_traits>
 #include <vector>
 
 namespace clap {
@@ -86,9 +87,17 @@ class basic_parser {
 template <typename Ch>
 template <typename C>
 typename basic_parser<Ch>::expr_t basic_parser<Ch>::parse(C const& input, std::size_t start) {
+	using type = typename C::value_type;
+	constexpr bool is_char = std::is_same_v<type, char const*> || std::is_same_v<type, char*>;
 	std::vector<char_t const*> vec;
 	vec.reserve(input.size());
-	for (auto const& str : input) { vec.push_back(str.data()); }
+	for (auto const& str : input) {
+		if constexpr (is_char) {
+			vec.push_back(str);
+		} else {
+			vec.push_back(str.data());
+		}
+	}
 	return parse(vec, start);
 }
 
