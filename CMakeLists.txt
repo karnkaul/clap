@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.3)
 
 project(clap)
 
-option(CLAP_EXAMPLE OFF)
+option(CLAP_EXAMPLE "Build clap example" OFF)
 
 file(GLOB_RECURSE INCLUDES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/include/*.?pp")
 source_group(TREE "${CMAKE_CURRENT_SOURCE_DIR}" FILES ${INCLUDES})
