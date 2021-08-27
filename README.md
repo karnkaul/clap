@@ -1,6 +1,6 @@
 ## Command Line Arguments Parser
 
-A lightweight, header-only library utilising C++17.
+A lightweight command line argument parsing library written in C++17.
 
 > _Note: the shared name with [clap-rs/clap](https://github.com/clap-rs/clap) is pure coincidence!_
 
@@ -8,63 +8,69 @@ A lightweight, header-only library utilising C++17.
 
 ### Features
 
-- Supports any char type (templated) and corresponding stdlib strings/views
-- Helper class to interpret args and print help texts
-- Customizable printer (via static polymorphism)
+- Inspired by `argp_parse` ([Argp](https://www.gnu.org/software/libc/manual/html_node/Argp.html))
+- Supports option lists, non-options anywhere, and parsing context switching via "cmds"
+- Customizable root parser (handles `--help` etc)
 - CMake integration
-- Example application (not built by default)
+- Example applications (not built by default)
+
+### Limitations
+
+- Output to `std::cout` / `std::cerr` only
+- Non customizable printers (use a custom root parser and print everything yourself instead)
 
 ### Example
 
-Refer to the [**example code**](example/clapp.cpp) for a program that prints the Nth fibonacci number. Configure CMake with `CLAP_EXAMPLE` to build it. Examples of its usage:
+There are two examples demonstrating basic and advanced usage:
+
+- [**fib**](examples/fib.cpp) prints the Nth fibonacci number
+- [**clapp**](examples/clapp.cpp) greets name and/or reverses arbitrary number of strings (using multiple parsers / cmds)
+
+Configure CMake with `CLAP_BUILD_EXAMPLES=ON` to build them.
 
 ```
-$ ./clapp
-clapp ^^
+$ ./fib
+Usage: fib [OPTION...] N
+Try 'fib --help' or 'fib --usage' for more information.
 
-$ ./clapp -h
-
-Usage: clapp [OPTIONS...] [COMMAND] [ARGS...]
-
-OPTIONS
-      --hi         Print greeting
-  -h, --help       Show help text
-      --version    Show version
-
-COMMANDS
-  fib    Print Nth Fibonacci number
-
-
-$ ./clapp --version
-1.0
-
-$ ./clapp --hi
-hi!
-clapp ^^
-
-$ ./clapp fib -h
-
-Usage: clapp fib [OPTIONS...] [ARGS...]
-
-DESCRIPTION
-  Print Nth Fibonacci number
+$ ./fib --help
+Usage: fib [OPTION...] N
+fib -- clap example that prints a fibonacci number / sequence
 
 OPTIONS
-  -s, --sequence    Print entire sequence of N numbers
-  -a, --a=[A]       Start number A
-  -b, --b=[B]       Start number B
+  -s, --sequence                print full sequence
+      --verbose                 verbose mode
+  -a, --arg-a=A                 start value of a
+  -b, --arg-b=B                 start value of b
+      --help                    Show this help text
+      --version                 Show version
+      --usage                   Show usage
 
-ARGUMENTS
-  [N]
+B must be > A
 
+$ ./fib 5
+5th Fibonacci number (0, 1): 3
 
-$ ./clapp fib -s
-10th Fibonacci number (0, 1): 0 1 1 2 3 5 8 13 21 34
-clapp ^^
+Powered by clap ^^ [-v0.2]
 
-$ ./clapp fib -s -a=1 -b=2 5
+$ ./fib --usage
+Usage: fib [-s] [-aA] [-bB] [--sequence] [--verbose] [--arg-a=A] [--arg-b=B] [--help] [--version] [--usage] N
+
+$ ./fib --verbose -s -a1 -b2 5
+
+input:
+        verbose         : true
+        sequence        : true
+        arg_a           : 1
+        arg_b           : 2
+        arg_n           : 5
+
 5th Fibonacci number (1, 2): 1 2 3 5 8
-clapp ^^
+
+Powered by clap ^^ [-v0.2]
+
+$ ./fib --version
+0.2
 ```
 
 ### Usage
@@ -78,63 +84,20 @@ clapp ^^
 
 1. Clone repo to appropriate subdirectory, say `clap`
 1. Add library to project via: `add_subdirectory(clap)` and `target_link_libraries(foo clap::clap)`
-1. Use via: `#include <clap/parser.hpp>` or `#include <clap/interpreter.hpp>`
-1. Configure with `CLAP_EXAMPLE=ON` to build the executable in `example`
+1. Use via `#include <clap/clap.hpp>`
+1. Configure with `CLAP_BUILD_EXAMPLES=ON` to build the executables in `examples` (also adds tests)
 
-#### parser
-
-Takes in raw arguments and returns a schema of `expr_t`.
-
-**Input Format**
+### Expression syntax
 
 ```
-[MAIN_OPTS...] [COMMAND] [CMD_OPTS...] [ARGUMENTS...]
-```
-
-All parameters are optional. Options are prefixed with `-` (single letter, supports chaining) or `--` (full word), and can take values separated by `=`. Arguments are collected verbatim.
-
-**Expression Schema**
-
-```
-command
-  id
-  options[]
-    id
-    value
-options[]
-  id
-  value
-arguments[]
-```
-
-Note: arguments are common between main/global and command.
-
-#### interpreter
-
-Takes in the output of `parser` (`expr_t`) and a specification, interprets it to print appropriate help text and execute matched callbacks, and returns an enum specifying if the app should exit or resume. Uses `printer` by default to delegate actual printing, a custom type can also be used. `printer` provides an interface to print `expr_t`s as well.
-
-An expression may invoke two callbacks: in `main` and a matched command (if any). The callbacks are passed a `params_t` representing matched options and verbatim arguments.
-
-**Spec Format**
-
-```
-main
-  exe
-  version
-  arg_format
-  options[]
-    id
-    description
-    value_format
-  callback
-commands{id => command}
-  description
-  arg_format
-  options[]
-    id
-    description
-    value_format
-  callback
+Syntax: [option...] [arg...] [cmd...]
+	cmd: cmd_key [option...] [arg...]
+	cmd_key (regex): [A-z]+
+	option (no / optional argument): -keylist | -option_key[=arg] | --option_name[=arg]
+	option (required argument): -option_keyarg | -option_key arg | -option_key=arg | --option_name=arg
+	option_key (regex): [A-z]
+	option_name (regex): [A-z]+
+	keylist (only options without arguments): -option_key0[option_key1...]
 ```
 
 ### Contributing
