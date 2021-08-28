@@ -1,21 +1,26 @@
 cmake_minimum_required(VERSION 3.14)
+include(GNUInstallDirs)
+include(CMakePackageConfigHelpers)
 
 set(CLAP_VERSION "0.2" CACHE STRING "clap version" FORCE)
 project(clap VERSION ${CLAP_VERSION})
 
 option(CLAP_BUILD_EXAMPLES "Build clap example" OFF)
 
-# TODO: Remove
-file(GLOB_RECURSE INCLUDES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/include/*.?pp")
-
 add_library(clap)
 add_library(clap::clap ALIAS clap)
 target_compile_features(clap PUBLIC cxx_std_17)
-target_include_directories(clap INTERFACE SYSTEM include)
+target_include_directories(clap SYSTEM INTERFACE 
+	$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+	$<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
+)
 target_include_directories(clap PRIVATE include src "${CMAKE_CURRENT_BINARY_DIR}/generated")
-target_sources(clap PRIVATE
+set(clap_includes
 	include/clap/clap_types.hpp
 	include/clap/clap.hpp
+)
+target_sources(clap PRIVATE
+	${clap_includes}
 	src/clap.cpp
 )
 get_target_property(sources clap SOURCES)
@@ -30,3 +35,27 @@ if(CLAP_BUILD_EXAMPLES)
 	enable_testing()
 	add_subdirectory(examples)
 endif()
+
+# install and export targets
+install(TARGETS clap EXPORT clap-targets
+	LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+	ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+	INCLUDES DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
+)
+# install exported targets
+install(EXPORT clap-targets
+	FILE clap-targets.cmake
+	NAMESPACE clap::
+	DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/clap
+)
+# install headers
+install(FILES ${clap_includes} DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/clap)
+# configure clap-config.cnake
+configure_package_config_file(${CMAKE_CURRENT_SOURCE_DIR}/config.cmake.in
+  "${CMAKE_CURRENT_BINARY_DIR}/clap-config.cmake"
+  INSTALL_DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/clap
+)
+# install clap-config.cmake
+install(FILES "${CMAKE_CURRENT_BINARY_DIR}/clap-config.cmake"
+	DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/clap
+)
