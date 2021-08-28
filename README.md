@@ -16,7 +16,6 @@ A lightweight command line argument parsing library written in C++17.
 
 ### Limitations
 
-- Output to `std::cout` / `std::cerr` only
 - Non customizable printers (use a custom root parser and print everything yourself instead)
 
 ### Example

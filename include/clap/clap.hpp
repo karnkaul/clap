@@ -1,4 +1,5 @@
 #pragma once
+#include <ostream>
 #include <clap/clap_types.hpp>
 
 namespace clap {
@@ -13,11 +14,29 @@ struct root_parser;
 struct program_spec;
 
 ///
+/// \brief Optional customization for root parser and output (defaults to std::cout and std::cerr)
+///
+struct parse_info {
+	///
+	/// \brief Custom root parser to use (optional)
+	///
+	root_parser* root{};
+	///
+	/// \brief Custom standard out (optional)
+	///
+	std::ostream* cout{};
+	///
+	/// \brief Custom standard error (optional)
+	///
+	std::ostream* cerr{};
+};
+
+///
 /// \brief Parse command line args
 /// \param spec program specification
 /// \param argc number of arguments (passed directly to main())
 /// \param argv pointer to arguments C-vector of C-strings (passed directly to main())
-/// \param root custom root parser to use (optional)
+/// \param info custom root parser / std out / err, etc
 /// \returns on successful parsing: quit if any parser requested it, else run; otherwise parse_error
 ///
 /// Syntax: [option...] [arg...] [cmd...]
@@ -29,7 +48,7 @@ struct program_spec;
 /// option_name (regex): [A-z]+
 /// keylist (only options without arguments): -option_key0[option_key1...]
 ///
-parse_result parse_args(program_spec const& spec, int argc, char const* const argv[], root_parser* root = {});
+parse_result parse_args(program_spec const& spec, int argc, char const* const argv[], parse_info const& info = {});
 
 ///
 /// \brief Option specification
@@ -114,7 +133,7 @@ class parse_state {
 	///
 	/// \brief Obtain const reference to root parser
 	///
-	option_parser const& root() const noexcept;
+	parse_info const& info() const noexcept;
 	///
 	/// \brief Obtain const reference to active parser
 	///

@@ -12,7 +12,7 @@ str_t unquote(str_t str) noexcept {
 
 struct state_impl {
 	str_t cmd_;
-	root_parser* root{};
+	parse_info info;
 	option_parser* parser{};
 	int argc{};
 	char const* const* argv{};
@@ -25,10 +25,7 @@ struct state_impl {
 	operator parse_state() noexcept { return parse_state(this); }
 };
 
-option_parser const& parse_state::root() const noexcept {
-	assert(m_impl->root);
-	return *m_impl->root;
-}
+parse_info const& parse_state::info() const noexcept { return m_impl->info; }
 option_parser const& parse_state::parser() const noexcept {
 	assert(m_impl->parser);
 	return *m_impl->parser;
@@ -43,9 +40,9 @@ void parse_state::early_exit(bool set_quit) noexcept {
 	if (set_quit) { m_impl->quit = true; }
 }
 
-void version(root_parser const& parser) { std::cout << parser.program->version << '\n'; }
-void usage_full(root_parser const& root, str_t cmd_key, option::flags_t root_mask);
-void help(root_parser const& root, str_t cmd_key);
+void version(parse_info const& info) { (*info.cout) << info.root->program->version << '\n'; }
+void usage_full(parse_info const& info, str_t cmd_key, option::flags_t root_mask);
+void help(parse_info const& info, str_t cmd_key);
 
 struct root_parser_impl : root_parser {
 	enum key { k_version = -1, k_usage = -2, ehelp = -3 };
@@ -71,12 +68,12 @@ struct root_parser_impl : root_parser {
 		};
 		switch (key) {
 		case ehelp: {
-			help(*this, state.cmd());
+			help(state.info(), state.cmd());
 			state.early_exit(true);
 			return true;
 		}
-		case k_version: return ret(state, [this]() { version(*this); });
-		case k_usage: return ret(state, [this, v = state.cmd()]() { usage_full(*this, v, v.empty() ? 0 : flag_force); });
+		case k_version: return ret(state, [state]() { version(state.info()); });
+		case k_usage: return ret(state, [state]() { usage_full(state.info(), state.cmd(), state.cmd().empty() ? 0 : flag_force); });
 		case no_end: return true;
 		default: return false;
 		}
@@ -85,7 +82,7 @@ struct root_parser_impl : root_parser {
 
 class args_parser {
   public:
-	parse_result operator()(program_spec const& spec, int argc, char const* const argv[], root_parser* root = {});
+	parse_result operator()(program_spec const& spec, int argc, char const* const argv[], parse_info info);
 
   private:
 	bool parse();
@@ -195,29 +192,29 @@ std::ostream& usage_short(std::ostream& out, root_parser const& root, str_t cmd_
 	return out;
 }
 
-void usage_full(root_parser const& root, str_t cmd_key, option::flags_t root_mask) {
-	std::cout << "Usage: " << root.program->name;
-	auto cmd = get_cmd(root, cmd_key);
+void usage_full(parse_info const& info, str_t cmd_key, option::flags_t root_mask) {
+	(*info.cout) << "Usage: " << info.root->program->name;
+	auto cmd = get_cmd(*info.root, cmd_key);
 	if (cmd) {
-		std::cout << ' ' << cmd->spec.cmd_key;
-	} else if (!root.program->cmds.empty()) {
-		if (root.program->cmds_required > 0) {
-			std::cout << " CMD";
+		(*info.cout) << ' ' << cmd->spec.cmd_key;
+	} else if (!info.root->program->cmds.empty()) {
+		if (info.root->program->cmds_required > 0) {
+			(*info.cout) << " CMD";
 		} else {
-			std::cout << " [CMD]";
+			(*info.cout) << " [CMD]";
 		}
 	}
-	auto parser = cmd ? cmd : root.parser();
-	auto parser_opts = [](option_parser const& parser, option::flags_t root_mask) {
-		for (auto const& o : parser.spec.options) { opt_key_arg(std::cout, o); }
+	auto parser = cmd ? cmd : info.root->parser();
+	auto parser_opts = [cout = info.cout](option_parser const& parser, option::flags_t root_mask) {
+		for (auto const& o : parser.spec.options) { opt_key_arg(*cout, o); }
 		for (auto const& o : parser.spec.options) {
-			if (pass(o.flags, root_mask)) { opt_str_arg(std::cout, o); }
+			if (pass(o.flags, root_mask)) { opt_str_arg(*cout, o); }
 		}
 	};
 	parser_opts(*parser, root_mask);
-	parser_opts(root, root_mask);
-	if (!parser->spec.arg_doc.empty()) { std::cout << ' ' << parser->spec.arg_doc; }
-	std::cout << '\n';
+	parser_opts(*info.root, root_mask);
+	if (!parser->spec.arg_doc.empty()) { (*info.cout) << ' ' << parser->spec.arg_doc; }
+	(*info.cout) << '\n';
 }
 
 struct pad_printer {
@@ -248,8 +245,8 @@ struct pad_printer {
 	}
 };
 
-void print_option(option const& opt, int width) {
-	pad_printer pr{std::cout};
+void print_option(parse_info const& info, option const& opt, int width) {
+	pad_printer pr{*info.cout};
 	pr << "  ";
 	pr.width = 4;
 	if (opt.key.is_alpha()) { pr << '-' << opt.key.alpha() << ", "; }
@@ -269,8 +266,8 @@ void print_option(option const& opt, int width) {
 	pr << "\t\t" << opt.doc << '\n';
 }
 
-void print_cmd(option_parser const& cmd, int width) {
-	pad_printer pr{std::cout};
+void print_cmd(parse_info const& info, option_parser const& cmd, int width) {
+	pad_printer pr{*info.cout};
 	pr.width = 8;
 	pr.align();
 	pr.reset();
@@ -280,44 +277,44 @@ void print_cmd(option_parser const& cmd, int width) {
 	pr << "\t\t" << cmd.spec.cmd_doc << '\n';
 }
 
-void options_full(root_parser const& root, str_t cmd_key, int width, option::flags_t root_mask) {
-	auto cmd = get_cmd(root, cmd_key);
-	auto parser = cmd ? cmd : root.parser();
-	bool const has_options = !parser->spec.options.empty() || !root.spec.options.empty();
+void options_full(parse_info const& info, str_t cmd_key, int width, option::flags_t root_mask) {
+	auto cmd = get_cmd(*info.root, cmd_key);
+	auto parser = cmd ? cmd : info.root->parser();
+	bool const has_options = !parser->spec.options.empty() || !info.root->spec.options.empty();
 	if (has_options) {
-		std::cout << "OPTIONS\n";
-		for (auto const& o : parser->spec.options) { print_option(o, width); }
-		for (auto const& o : root.spec.options) {
-			if (pass(o.flags, root_mask)) { print_option(o, width); }
+		(*info.cout) << "OPTIONS\n";
+		for (auto const& o : parser->spec.options) { print_option(info, o, width); }
+		for (auto const& o : info.root->spec.options) {
+			if (pass(o.flags, root_mask)) { print_option(info, o, width); }
 		}
-		std::cout << '\n';
+		(*info.cout) << '\n';
 	}
 }
 
-void cmds_full(root_parser const& root, int width) {
-	if (!root.program->cmds.empty()) {
-		std::cout << "CMDS\n";
-		for (option_parser const* cmd : root.program->cmds) {
-			if (cmd) { print_cmd(*cmd, width); }
+void cmds_full(parse_info const& info, int width) {
+	if (!info.root->program->cmds.empty()) {
+		(*info.cout) << "CMDS\n";
+		for (option_parser const* cmd : info.root->program->cmds) {
+			if (cmd) { print_cmd(info, *cmd, width); }
 		}
-		std::cout << '\n';
+		(*info.cout) << '\n';
 	}
 }
 
-void help(root_parser const& root, str_t cmd_key) {
-	usage_short(std::cout, root, cmd_key) << '\n';
-	auto cmd = get_cmd(root, cmd_key);
+void help(parse_info const& info, str_t cmd_key) {
+	usage_short(*info.cout, *info.root, cmd_key) << '\n';
+	auto cmd = get_cmd(*info.root, cmd_key);
 	if (cmd) {
-		if (!cmd->spec.cmd_doc.empty()) { std::cout << '\n' << cmd->spec.cmd_doc << '\n'; }
-	} else if (!root.program->doc.empty()) {
-		std::cout << root.program->name << " -- " << root.program->doc << '\n';
+		if (!cmd->spec.cmd_doc.empty()) { (*info.cout) << '\n' << cmd->spec.cmd_doc << '\n'; }
+	} else if (!info.root->program->doc.empty()) {
+		(*info.cout) << info.root->program->name << " -- " << info.root->program->doc << '\n';
 	}
-	std::cout << '\n';
-	auto const width = static_cast<int>(longest_name(root, cmd));
-	if (!cmd) { cmds_full(root, width); }
-	options_full(root, cmd_key, width, cmd ? root_parser_impl::flag_force : 0);
-	option_parser const* p = cmd ? cmd : root.parser();
-	if (!p->spec.doc_desc.empty()) { std::cout << p->spec.doc_desc << '\n'; }
+	(*info.cout) << '\n';
+	auto const width = static_cast<int>(longest_name(*info.root, cmd));
+	if (!cmd) { cmds_full(info, width); }
+	options_full(info, cmd_key, width, cmd ? root_parser_impl::flag_force : 0);
+	option_parser const* p = cmd ? cmd : info.root->parser();
+	if (!p->spec.doc_desc.empty()) { (*info.cout) << p->spec.doc_desc << '\n'; }
 }
 
 std::ostream& print_try(std::ostream& out, str_t program_name, str_t cmd_key, bool usage) {
@@ -333,8 +330,8 @@ std::ostream& print_try(std::ostream& out, str_t program_name, str_t cmd_key, bo
 }
 
 void option_parser::usage(parse_state state) {
-	usage_short(std::cout, *state.m_impl->root, state.cmd()) << '\n';
-	print_try(std::cout, state.m_impl->root->program->name, {}, true) << '\n';
+	usage_short(*state.info().cout, *state.m_impl->info.root, state.cmd()) << '\n';
+	print_try(*state.info().cout, state.m_impl->info.root->program->name, {}, true) << '\n';
 }
 
 std::ostream& print_option_id(std::ostream& out, option const& opt) {
@@ -345,69 +342,71 @@ std::ostream& print_option_id(std::ostream& out, option const& opt) {
 	}
 }
 
-bool err_missing_cmd(str_t program_name) {
-	std::cerr << program_name << ": requires a cmd\n";
-	print_try(std::cerr, program_name, {}, false) << '\n';
+bool err_missing_cmd(parse_info const& info) {
+	(*info.cerr) << info.root->program->name << ": requires a cmd\n";
+	print_try((*info.cerr), info.root->program->name, {}, false) << '\n';
 	return false;
 }
 
-bool err_unknown_cmd(str_t program_name, str_t v) {
-	std::cerr << "Unrecognized cmd -- '" << v << "'\n";
-	print_try(std::cerr, program_name, {}, false) << '\n';
+bool err_unknown_cmd(parse_info const& info, str_t cmd) {
+	(*info.cerr) << "Unrecognized cmd -- '" << cmd << "'\n";
+	print_try((*info.cerr), info.root->program->name, {}, false) << '\n';
 	return false;
 }
 
-bool err_unknown_arg(str_t program_name, str_t v, str_t arg) {
-	std::cerr << "Unrecognized argument -- '" << arg << "'\n";
-	print_try(std::cerr, program_name, v, false) << '\n';
+bool err_unknown_arg(parse_info const& info, str_t cmd, str_t arg) {
+	(*info.cerr) << "Unrecognized argument -- '" << arg << "'\n";
+	print_try((*info.cerr), info.root->program->name, cmd, false) << '\n';
 	return false;
 }
 
-bool err_missing_arg(str_t program_name, str_t v, option const& opt) {
-	std::cerr << program_name << ": option requires an argument -- ";
-	print_option_id(std::cerr, opt) << '\n';
-	print_try(std::cerr, program_name, v, false) << '\n';
+bool err_missing_arg(parse_info const& info, str_t v, option const& opt) {
+	(*info.cerr) << info.root->program->name << ": option requires an argument -- ";
+	print_option_id((*info.cerr), opt) << '\n';
+	print_try((*info.cerr), info.root->program->name, v, false) << '\n';
 	return false;
 }
 
-bool err_opt_arg(str_t program_name, str_t cmd_key, option const& opt, str_t arg) {
-	std::cerr << program_name << ":";
+bool err_opt_arg(parse_info const& info, str_t cmd_key, option const& opt, str_t arg) {
+	(*info.cerr) << info.root->program->name << ":";
 	if (!arg.empty() && opt.arg.empty()) {
-		std::cerr << " option does not take an argument -- ";
+		(*info.cerr) << " option does not take an argument -- ";
 	} else {
-		std::cerr << " invalid argument to option -- ";
+		(*info.cerr) << " invalid argument to option -- ";
 	}
-	print_option_id(std::cerr, opt) << '\n';
-	print_try(std::cerr, program_name, cmd_key, false) << '\n';
+	print_option_id((*info.cerr), opt) << '\n';
+	print_try((*info.cerr), info.root->program->name, cmd_key, false) << '\n';
 	return false;
 }
 
-bool err_unknown_opt(str_t program_name, str_t cmd_key, int key, str_t name) {
-	std::cerr << "Unrecognized option -- ";
-	print_option_id(std::cerr, {key, name}) << '\n';
-	print_try(std::cerr, program_name, cmd_key, false) << '\n';
+bool err_unknown_opt(parse_info const& info, str_t cmd_key, int key, str_t name) {
+	(*info.cerr) << "Unrecognized option -- ";
+	print_option_id((*info.cerr), {key, name}) << '\n';
+	print_try((*info.cerr), info.root->program->name, cmd_key, false) << '\n';
 	return false;
 }
 
-bool parse_option(root_parser const& root, option_parser& parser, option const& opt, str_t arg, parse_state st, option::flags_t mask) {
+bool parse_option(parse_info const& info, option_parser& parser, option const& opt, str_t arg, parse_state st, option::flags_t mask) {
 	if (opt.arg.empty() && !arg.empty()) {
-		return err_opt_arg(root.program->name, st.cmd(), opt, arg);
+		return err_opt_arg(info, st.cmd(), opt, arg);
 	} else if (mask != 0) {
 		if (pass(opt.flags, mask) && parser(opt.key, arg, st)) { return true; }
 		return false;
 	} else if (parser(opt.key, arg, st)) {
 		return true;
 	} else {
-		return err_opt_arg(root.program->name, st.cmd(), opt, arg);
+		return err_opt_arg(info, st.cmd(), opt, arg);
 	}
 }
 
-parse_result args_parser::operator()(program_spec const& spec, int argc, char const* const argv[], root_parser* root) {
+parse_result args_parser::operator()(program_spec const& spec, int argc, char const* const argv[], parse_info info) {
 	root_parser_impl r;
-	if (!root) { root = &r; }
-	root->program = &spec;
-	if (root->program->name.empty() && argc > 0) { root->program->name = exe_name(argv[0]); }
-	m_state = {{}, root, root->parser(), argc, argv, 1};
+	if (!info.root) { info.root = &r; }
+	if (!info.cout) { info.cout = &std::cout; }
+	if (!info.cerr) { info.cerr = &std::cerr; }
+	info.root->program = &spec;
+	if (info.root->program->name.empty() && argc > 0) { info.root->program->name = exe_name(argv[0]); }
+	m_state = state_impl{{}, info, info.root->parser(), argc, argv, 1};
 	if (parse()) { return m_state.quit ? parse_result::quit : parse_result::run; }
 	return parse_result::parse_error;
 }
@@ -424,7 +423,6 @@ str_t args_parser::next() noexcept {
 }
 
 bool args_parser::parse() {
-	str_t const prog = m_state.root->program->name;
 	bool no_more_opts{};
 	while (!peek().empty()) {
 		str_t arg = next();
@@ -478,7 +476,7 @@ bool args_parser::parse() {
 			++m_state.opts_parsed;
 		} else {
 			// check for cmd
-			if (auto cmd = get_cmd(*m_state.root, arg)) {
+			if (auto cmd = get_cmd(*m_state.info.root, arg)) {
 				m_state.cmd_ = cmd->spec.cmd_key;
 				m_state.parser = cmd;
 				++m_state.cmds_parsed;
@@ -486,12 +484,12 @@ bool args_parser::parse() {
 				continue;
 			}
 			// non-option
-			if (!(*m_state.parser)(option_parser::no_arg, arg, m_state)) { return err_unknown_arg(prog, m_state.cmd_, arg); }
+			if (!(*m_state.parser)(option_parser::no_arg, arg, m_state)) { return err_unknown_arg(m_state.info, m_state.cmd_, arg); }
 			++m_state.arg_idx;
 		}
 	}
 	if (!m_state.quit) {
-		if (m_state.cmds_parsed < m_state.root->program->cmds_required) { return err_missing_cmd(prog); }
+		if (m_state.cmds_parsed < m_state.info.root->program->cmds_required) { return err_missing_cmd(m_state.info); }
 		// end
 		if (!(*m_state.parser)(option_parser::no_end, {}, m_state)) {
 			m_state.parser->usage(m_state);
@@ -506,53 +504,53 @@ bool args_parser::option(str_t opt, str_t arg, option::flags_t mask, bool check_
 		*unknown_opt = false;
 		for (auto const& o : parser->spec.options) {
 			if ((opt.size() == 1 && opt[0] == o.key) || o.name == opt) {
-				if (!o.arg.empty() && arg.empty() && !optional(o.flags)) { return err_missing_arg(m_state.root->program->name, m_state.cmd_, o); }
-				return parse_option(*m_state.root, *parser, o, arg, m_state, mask);
+				if (!o.arg.empty() && arg.empty() && !optional(o.flags)) { return err_missing_arg(m_state.info, m_state.cmd_, o); }
+				return parse_option(m_state.info, *parser, o, arg, m_state, mask);
 			}
 		}
 		*unknown_opt = true;
 		return false;
 	};
 	bool unknown_opt{};
-	if (check(m_state.root, mask, &unknown_opt) || !check_parser || check(m_state.parser, 0, &unknown_opt)) { return true; }
-	return unknown_opt ? err_unknown_opt(m_state.root->program->name, m_state.cmd_, 0, opt) : false;
+	if (check(m_state.info.root, mask, &unknown_opt) || !check_parser || check(m_state.parser, 0, &unknown_opt)) { return true; }
+	return unknown_opt ? err_unknown_opt(m_state.info, m_state.cmd_, 0, opt) : false;
 }
 
 bool args_parser::option(char key) {
 	for (auto const& o : m_state.parser->spec.options) {
 		if (o.key != char{} && o.key == key) {
-			if (!o.arg.empty() && !optional(o.flags)) { return err_missing_arg(m_state.root->program->name, m_state.cmd_, o); }
-			return parse_option(*m_state.root, *m_state.parser, o, {}, m_state, 0);
+			if (!o.arg.empty() && !optional(o.flags)) { return err_missing_arg(m_state.info, m_state.cmd_, o); }
+			return parse_option(m_state.info, *m_state.parser, o, {}, m_state, 0);
 		}
 	}
-	return err_unknown_opt(m_state.root->program->name, m_state.cmd_, key, {});
+	return err_unknown_opt(m_state.info, m_state.cmd_, key, {});
 }
 
 bool args_parser::option_peek(char key) {
 	for (auto const& o : m_state.parser->spec.options) {
 		if (o.key != char{} && o.key == key) {
 			if (!o.arg.empty() && !optional(o.flags)) {
-				if (peek().empty()) { return err_missing_arg(m_state.root->program->name, m_state.cmd_, o); }
-				return parse_option(*m_state.root, *m_state.parser, o, next(), m_state, 0);
+				if (peek().empty()) { return err_missing_arg(m_state.info, m_state.cmd_, o); }
+				return parse_option(m_state.info, *m_state.parser, o, next(), m_state, 0);
 			} else {
-				return parse_option(*m_state.root, *m_state.parser, o, {}, m_state, 0);
+				return parse_option(m_state.info, *m_state.parser, o, {}, m_state, 0);
 			}
 		}
 	}
-	return err_unknown_opt(m_state.root->program->name, m_state.cmd_, key, {});
+	return err_unknown_opt(m_state.info, m_state.cmd_, key, {});
 }
 
 bool args_parser::option_consume(char key, str_t arg, bool* consumed) {
 	for (auto const& o : m_state.parser->spec.options) {
 		if (o.key != char{} && o.key == key) {
 			*consumed = !o.arg.empty();
-			return parse_option(*m_state.root, *m_state.parser, o, *consumed ? arg : str_t{}, m_state, 0);
+			return parse_option(m_state.info, *m_state.parser, o, *consumed ? arg : str_t{}, m_state, 0);
 		}
 	}
-	return err_unknown_opt(m_state.root->program->name, m_state.cmd_, key, {});
+	return err_unknown_opt(m_state.info, m_state.cmd_, key, {});
 }
 
-parse_result parse_args(program_spec const& cmd, int argc, char const* const argv[], root_parser* root) { return args_parser{}(cmd, argc, argv, root); }
+parse_result parse_args(program_spec const& cmd, int argc, char const* const argv[], parse_info const& info) { return args_parser{}(cmd, argc, argv, info); }
 
 str_t lib_version() noexcept { return clap_version; }
 } // namespace clap

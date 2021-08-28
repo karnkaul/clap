@@ -2,6 +2,7 @@ cmake_minimum_required(VERSION 3.14)
 include(GNUInstallDirs)
 include(CMakePackageConfigHelpers)
 
+set(CMAKE_DEBUG_POSTFIX "-d")
 set(CLAP_VERSION "0.2" CACHE STRING "clap version" FORCE)
 project(clap VERSION ${CLAP_VERSION})
 
@@ -15,12 +16,9 @@ target_include_directories(clap SYSTEM INTERFACE
 	$<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
 )
 target_include_directories(clap PRIVATE include src "${CMAKE_CURRENT_BINARY_DIR}/generated")
-set(clap_includes
-	include/clap/clap_types.hpp
-	include/clap/clap.hpp
-)
 target_sources(clap PRIVATE
-	${clap_includes}
+	include/clap/clap.hpp
+	include/clap/clap_types.hpp
 	src/clap.cpp
 )
 get_target_property(sources clap SOURCES)
@@ -49,8 +47,8 @@ install(EXPORT clap-targets
 	DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/clap
 )
 # install headers
-install(FILES ${clap_includes} DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/clap)
-# configure clap-config.cnake
+install(DIRECTORY include/ DESTINATION ${CMAKE_INSTALL_INCLUDEDIR} FILES_MATCHING PATTERN "*.hpp")
+# configure clap-config.cmake
 configure_package_config_file(${CMAKE_CURRENT_SOURCE_DIR}/config.cmake.in
   "${CMAKE_CURRENT_BINARY_DIR}/clap-config.cmake"
   INSTALL_DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/clap
