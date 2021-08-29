@@ -1,0 +1,1 @@
+char const* clap_version = "@CLAP_VERSION@";
