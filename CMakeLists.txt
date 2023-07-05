@@ -100,18 +100,18 @@ if(CLAP_INSTALL)
 
     FILE ${PROJECT_NAME}-targets.cmake
     NAMESPACE ${PROJECT_NAME}::
-    DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/${PROJECT_NAME}
+    DESTINATION share/cmake/${PROJECT_NAME}
   )
 
   configure_package_config_file(
     "${CMAKE_CURRENT_SOURCE_DIR}/src/config.cmake.in"
     "${CMAKE_CURRENT_BINARY_DIR}/${PROJECT_NAME}-config.cmake"
-    INSTALL_DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/${PROJECT_NAME}
+    INSTALL_DESTINATION share/cmake/${PROJECT_NAME}
   )
 
   install(FILES
     "${CMAKE_CURRENT_BINARY_DIR}/${PROJECT_NAME}-config.cmake"
 
-    DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/${PROJECT_NAME}
+    DESTINATION share/cmake/${PROJECT_NAME}
   )
 endif()
