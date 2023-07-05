@@ -1,5 +1,5 @@
 #include <string_view>
 
 namespace clap {
-constexpr std::string_view version_v{"@CLAP_VERSION@"};
+constexpr std::string_view version_v{"@PROJECT_VERSION@"};
 }
