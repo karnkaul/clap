@@ -1,254 +1,164 @@
 #pragma once
-#include <ostream>
-#include <clap/clap_types.hpp>
+#include <clap/build_version.hpp>
+#include <clap/detail/from_string.hpp>
+#include <concepts>
+#include <memory>
+#include <span>
 
 namespace clap {
 ///
-/// \brief Result of parsing
+/// \brief Constraint for a type that can be parsed from a string(stream).
 ///
-enum class parse_result { run, quit, parse_error };
-using str_t = std::string_view;
-
-struct option_parser;
-struct root_parser;
-struct program_spec;
-
+/// operator>>(istream&, T&) must be overloaded.
 ///
-/// \brief Optional customization for root parser and output (defaults to std::cout and std::cerr)
-///
-struct parse_info {
-	///
-	/// \brief Custom root parser to use (optional)
-	///
-	root_parser* root{};
-	///
-	/// \brief Custom standard out (optional)
-	///
-	std::ostream* cout{};
-	///
-	/// \brief Custom standard error (optional)
-	///
-	std::ostream* cerr{};
+template <typename Type>
+concept ParseableT = requires(std::istream& i, Type& t) {
+	{ i >> t } -> std::convertible_to<std::istream&>;
 };
 
-///
-/// \brief Parse command line args
-/// \param spec program specification
-/// \param argc number of arguments (passed directly to main())
-/// \param argv pointer to arguments C-vector of C-strings (passed directly to main())
-/// \param info custom root parser / std out / err, etc
-/// \returns on successful parsing: quit if any parser requested it, else run; otherwise parse_error
-///
-/// Syntax: [option...] [arg...] [cmd...]
-/// cmd: cmd_key [option...] [arg...]
-/// cmd_key (regex): [A-z]+
-/// option (no / optional argument): -keylist | -option_key[=arg] | --option_name[=arg]
-/// option (required argument): -option_keyarg | -option_key arg | -option_key=arg | --option_name=arg
-/// option_key (regex): [A-z]
-/// option_name (regex): [A-z]+
-/// keylist (only options without arguments): -option_key0[option_key1...]
-///
-parse_result parse_args(program_spec const& spec, int argc, char const* const argv[], parse_info const& info = {});
+namespace detail {
+template <typename Type>
+constexpr bool is_bindable_v{false};
+
+template <ParseableT Type>
+constexpr bool is_bindable_v<Type>{true};
+
+template <ParseableT Type>
+static constexpr bool is_bindable_v<std::vector<Type>>{true};
+} // namespace detail
 
 ///
-/// \brief Option specification
+/// \brief Constraint for a type that can be bound as an argument.
 ///
-struct option {
-	enum flag_t { flag_none = 0, flag_optional = 1 << 0 };
-	using flags_t = std::uint32_t;
-
-	///
-	/// \brief Long name
-	///
-	str_t name;
-	///
-	/// \brief Argument doc, if any
-	///
-	str_t arg;
-	///
-	/// \brief Doc string
-	///
-	str_t doc;
-	///
-	/// \brief Identifying key; if char, also used as short-code
-	///
-	option_key key;
-	///
-	/// \brief Meta flags
-	///
-	flags_t flags{};
-
-	constexpr option(option_key key, str_t name, str_t doc = {}, str_t arg = {}, flags_t flags = {}) noexcept
-		: name(name), arg(arg), doc(doc), key(key), flags(flags) {}
-};
-using options_view = array_view<option>;
+/// Must be ParseableT or std::vector<ParseableT>.
+///
+template <typename Type>
+concept BindableT = detail::is_bindable_v<Type>;
 
 ///
-/// \brief List of cmds
+/// \brief Result of parsing options.
 ///
-using cmds_view = array_view<option_parser*>;
+enum class Result { eContinue, eExit, eParseError };
 
 ///
-/// \brief Program specification
+/// \brief Primary interface to build options and parse command line arguments.
 ///
-struct program_spec {
-	///
-	/// \brief Version string
-	///
-	str_t version;
-	///
-	/// \brief Doc string
-	///
-	str_t doc;
-	///
-	/// \brief Name (assigned through arg0 if empty)
-	///
-	mutable str_t name;
-	///
-	/// \brief Primary option parser (required)
-	///
-	option_parser* parser{};
-	///
-	/// \brief Verbs, if any (with secondary parsers)
-	///
-	/// The internal parser supports contextually switching the active option_parser via a "cmd" as a non-option argument.
-	/// Such parses must be associated to unique keys and must not have option key collisions.
-	/// Only one parser is active at a time (in addition to the root parser) for (non) options being parsed; a cmd simply modifies that.
-	/// Set this member to an array of such cmds if desired.
-	///
-	cmds_view cmds;
-	///
-	/// \brief Minimum number of cmds to have been invoked for success (only applicable if cmds is non empty)
-	///
-	int cmds_required{};
-};
-
-///
-/// \brief View into parse state metadata (passed to option_parser callback)
-///
-/// Can only be constructed by clap internals
-///
-class parse_state {
+class Options {
   public:
 	///
-	/// \brief Obtain const reference to root parser
+	/// \brief Construct an Options instance.
+	/// \param app_name Name of application (displayed in help and on errors).
+	/// \param description Description of application (displayed in help).
+	/// \param version Version text to display.
 	///
-	parse_info const& info() const noexcept;
+	Options(std::string app_name, std::string description, std::string version);
+
 	///
-	/// \brief Obtain const reference to active parser
+	/// \brief Set the (optional) help footer text.
+	/// \param footer Text to display.
 	///
-	option_parser const& parser() const noexcept;
+	Options& set_footer(std::string footer);
+
 	///
-	/// \brief Obtain number of options parsed so far
+	/// \brief Bind an option with an implicit boolean value.
+	/// \param out_flag Flag to set if option is passed.
+	/// \param group Group of option ("<key>" or "<letter>,<key>").
+	/// \param description Description of option (displayed in help).
 	///
-	int opts_parsed() const noexcept;
+	Options& flag(bool& out_flag, std::string group, std::string description);
+
 	///
-	/// \brief Obtain number of cmds parsed so far
+	/// \brief Bind an option with a required argument.
+	/// \param out Variable to parse argument into.
+	/// \param group Group of option ("<key>" or "<letter>,<key>").
+	/// \param description Description of option (displayed in help).
+	/// \param usage Usage text.
 	///
-	int cmds_parsed() const noexcept;
+	template <BindableT Type>
+	Options& required(Type& out, std::string group, std::string description, std::string usage) {
+		auto arg = detail::Argument{.usage = std::move(usage), .from_string = detail::make_from_string(out), .required = true};
+		return bind_option({}, std::move(arg), std::move(group), std::move(description));
+	}
+
 	///
-	/// \brief Obtain current argument index
+	/// \brief Bind an option with an optional argument.
+	/// \param out Variable to parse argument into, if passed.
+	/// \param group Group of option ("<key>" or "<letter>,<key>").
+	/// \param description Description of option (displayed in help).
+	/// \param usage Usage text.
+	/// \param out_was_passed Flag that's set if option is passed, regardless of argument presence.
 	///
-	int arg_index() const noexcept;
+	template <BindableT Type>
+	Options& optional(Type& out, bool& out_was_passed, std::string group, std::string description, std::string usage) {
+		auto arg = detail::Argument{.usage = std::move(usage), .from_string = detail::make_from_string(out)};
+		return bind_option(&out_was_passed, std::move(arg), std::move(group), std::move(description));
+	}
+
 	///
-	/// \brief Obtain active cmd key, if any
+	/// \brief Bind the next positional argument.
+	/// \param out Variable to parse argument into.
+	/// \param operand Name of operand.
+	/// \param usage Usage text, if different from operand.
 	///
-	str_t cmd() const noexcept;
+	template <ParseableT Type>
+	Options& positional(Type& out, std::string operand, std::string usage = {}) {
+		return bind_positional(detail::make_from_string(out), std::move(operand), std::move(usage));
+	}
+
 	///
-	/// \brief Check if the quit flag been set
+	/// \brief Bind (all) unmatched arguments.
+	/// \param out Vector to fill with unmatched arguments.
+	/// \param usage Usage text.
 	///
-	bool quit() const noexcept;
+	template <ParseableT Type>
+	Options& unmatched(std::vector<Type>& out, std::string usage) {
+		return bind_unmatched(detail::make_from_string(out), std::move(usage));
+	}
+
 	///
-	/// \brief Terminate parsing after this argument
-	/// \param set_quit set the quit flag (not modified if false)
+	/// \brief Parse a range of C strings.
+	/// \returns Result of parsing.
+	/// \param args range of strings to parse.
 	///
-	void early_exit(bool set_quit) noexcept;
+	Result parse(std::span<char const* const> args);
+
+	///
+	/// \brief Parse arguments to main.
+	/// \returns Result of parsing.
+	/// \param argc First argument to main.
+	/// \param argv Second argument to main.
+	/// \param parse_arg0 Whether to parse the argv[0] as an option (otherwise skip it).
+	///
+	Result parse(int argc, char const* const* argv, bool const parse_arg0 = false);
 
   private:
-	parse_state(struct state_impl* impl) noexcept : m_impl(impl) {}
-	struct state_impl* m_impl;
-	friend struct state_impl;
-	friend struct option_parser;
-};
+	Options& bind_option(bool* out_was_passed, detail::Argument argument, std::string group, std::string description);
+	Options& bind_positional(detail::FromString from_string, std::string key, std::string usage);
+	Options& bind_unmatched(detail::FromString from_string, std::string usage);
+	void print_help();
 
-///
-/// \brief Option parser customization point
-///
-struct option_parser {
-	///
-	/// \brief Unscoped enum for identifying non-option args
-	///
-	/// no_arg: argument to (preceding) option
-	/// no_end: termination token (all arguments have been parsed)
-	///
-	enum non_opt { no_arg = -100, no_end };
-	///
-	/// \brief Parser specification
-	///
-	struct spec_t {
-		///
-		/// \brief Option list
-		///
-		options_view options;
-		///
-		/// \brief Args doc string, if any
-		///
-		str_t arg_doc;
-		///
-		/// \brief Description for command / args in arg_doc
-		///
-		str_t doc_desc;
-		///
-		/// \brief Unique identifier for this parser (if not primary)
-		///
-		str_t cmd_key;
-		///
-		/// \brief Doc string for cmd
-		///
-		str_t cmd_doc;
+	struct Impl;
+	struct Deleter {
+		void operator()(Impl const* ptr) const;
 	};
 
-	///
-	/// \brief Instance specification (initialize before operator(), eg in constructor)
-	///
-	spec_t spec;
-
-	///
-	/// \brief Customization point
-	///
-	/// This function is called once for every argument being parsed.
-	/// If the argument is an option, its key is passd as the identifier.
-	/// If the option takes an argument, it will be passed in arg; if not optional and missing, an error will be logged.
-	/// If the argument is a non-option, the key is option_parser::non_opt::no_arg.
-	/// This function is also called once at the end with key == option_parser::non_opt::no_end.
-	/// The function should return false to print corresponding parse errors, and true to signal the parser to continue.
-	/// Typical impementations handle all options (and args) within a single switch block.
-	/// The current parse state can be inspected and set to exit and/or terminate parsing.
-	/// Eg: to suppress errors, call state.early_exit() and return true to stop parsing.
-	///
-	virtual bool operator()(option_key key, str_t arg, parse_state state) = 0;
-
-	///
-	/// \brief Helper function to print (short) usage
-	///
-	static void usage(parse_state state);
+	std::unique_ptr<Impl, Deleter> m_impl{};
 };
 
 ///
-/// \brief Interface for root parser (expected to handle help, usage, version, etc)
+/// \brief Check if application should quit.
 ///
-/// Root parser is always called and only for options (never for non-options / termination).
-/// Its options should not have char keys.
-/// Its doc strings are appended to the end of the active parser's.
-///
-struct root_parser : option_parser {
-	program_spec const* program{};
-
-	option_parser* parser() const noexcept { return program->parser; }
-};
+constexpr bool should_quit(Result const result) { return result != Result::eContinue; }
 
 ///
-/// \brief Obtain clap version
+/// \brief Obtain the return code.
+/// \returns EXIT_FAILURE if parse_error(), else EXIT_SUCCESS.
 ///
-str_t lib_version() noexcept;
+constexpr int return_code(Result const result) { return result == Result::eParseError ? EXIT_FAILURE : EXIT_SUCCESS; }
+
+///
+/// \brief Obtain the app name from the first argument to main.
+/// \returns std::filesystem::path(arg0).stem().
+///
+std::string make_app_name(std::string_view const arg0);
 } // namespace clap

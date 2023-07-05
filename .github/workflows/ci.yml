@@ -1,0 +1,27 @@
+name: ci
+on: [push, pull_request]
+jobs:
+  build-linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - name: configure gcc
+        run: cmake -S . --preset=default -B build
+      - name: configure clang
+        run: cmake -S . --preset=ninja-clang -B clang
+      - name: build gcc
+        run: cmake --build build --config=Release
+      - name: build clang
+        run: cmake --build clang --config=Release
+      - name: test
+        run: cd build && ctest -C Release
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v2
+      - name: configure
+        run: cmake -S . --preset=vs22 -B build
+      - name: build
+        run: cmake --build build --config=Release
+      - name: test
+        run: cd build && ctest -C Release
