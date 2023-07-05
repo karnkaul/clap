@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.18)
 
-project(clap VERSION "0.4.0")
+project(clap VERSION "0.4.1")
 
 set(is_root_project OFF)
 
@@ -15,11 +15,11 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 option(CLAP_BUILD_EXAMPLE "Build clap example" ${is_root_project})
 option(CLAP_BUILD_TEST "Build clap tests" ${is_root_project})
 
-add_library(${PROJECT_NAME}-compile-options INTERFACE)
-add_library(${PROJECT_NAME}::compile-options ALIAS ${PROJECT_NAME}-compile-options)
+add_library(compile-options INTERFACE)
+add_library(${PROJECT_NAME}::compile-options ALIAS compile-options)
 
 if(CMAKE_CXX_COMPILER_ID STREQUAL Clang OR CMAKE_CXX_COMPILER_ID STREQUAL GNU)
-  target_compile_options(${PROJECT_NAME}-compile-options INTERFACE
+  target_compile_options(compile-options INTERFACE
     -Wall -Wextra -Wpedantic -Wconversion -Werror=return-type
   )
 endif()
@@ -30,8 +30,9 @@ add_library(clap::clap ALIAS clap)
 target_compile_features(clap PUBLIC cxx_std_20)
 
 target_include_directories(clap SYSTEM INTERFACE
-  include
-  "${CMAKE_CURRENT_BINARY_DIR}/include"
+  "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>"
+  "$<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}/include>"
+  $<INSTALL_INTERFACE:include>
 )
 
 target_include_directories(clap PRIVATE
@@ -65,4 +66,52 @@ endif()
 if(CLAP_BUILD_TEST)
   enable_testing()
   add_subdirectory(test)
+endif()
+
+# install
+option(CLAP_INSTALL "Setup CMake install for clap" ${is_root_project})
+
+if(CLAP_INSTALL)
+  include(GNUInstallDirs)
+  include(CMakePackageConfigHelpers)
+
+  install(TARGETS
+    ${PROJECT_NAME}
+    compile-options
+
+    EXPORT ${PROJECT_NAME}-targets
+  )
+
+  install(DIRECTORY
+    include/
+
+    DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
+    FILES_MATCHING PATTERN "*.hpp"
+  )
+
+  install(FILES
+    "${CMAKE_CURRENT_BINARY_DIR}/include/${PROJECT_NAME}/build_version.hpp"
+
+    DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/${PROJECT_NAME}
+  )
+
+  install(EXPORT
+    ${PROJECT_NAME}-targets
+
+    FILE ${PROJECT_NAME}-targets.cmake
+    NAMESPACE ${PROJECT_NAME}::
+    DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/${PROJECT_NAME}
+  )
+
+  configure_package_config_file(
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/config.cmake.in"
+    "${CMAKE_CURRENT_BINARY_DIR}/${PROJECT_NAME}-config.cmake"
+    INSTALL_DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/${PROJECT_NAME}
+  )
+
+  install(FILES
+    "${CMAKE_CURRENT_BINARY_DIR}/${PROJECT_NAME}-config.cmake"
+
+    DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/${PROJECT_NAME}
+  )
 endif()
