@@ -1,105 +1,153 @@
-## Command Line Arguments Parser
+# clap
 
-A lightweight command line argument parsing library written in C++17.
+**A lightweight Command Line Argument Parser library written in C++20**.
 
 > _Note: the shared name with [clap-rs/clap](https://github.com/clap-rs/clap) is pure coincidence!_
 
-[![Codacy Badge](https://app.codacy.com/project/badge/Grade/7b4a9afebf9b45809207eda599b66326)](https://www.codacy.com/gh/karnkaul/clap/dashboard?utm_source=github.com&utm_medium=referral&utm_content=karnkaul/clap&utm_campaign=Badge_Grade)
+## Quick start
 
-### Features
+This is a lightweight, type-safe, C++ option parser library, supporting the standard GNU style syntax for options.
 
-- Inspired by `argp_parse` ([Argp](https://www.gnu.org/software/libc/manual/html_node/Argp.html))
-- Supports option lists, non-options anywhere, and parsing context switching via "cmds"
-- Customizable root parser (handles `--help` etc)
-- CMake integration
-- Example applications (not built by default)
-
-### Limitations
-
-- Non customizable printers (use a custom root parser and print everything yourself instead)
-
-### Example
-
-There are two examples demonstrating basic and advanced usage:
-
-- [**fib**](examples/fib.cpp) prints the Nth fibonacci number
-- [**clapp**](examples/clapp.cpp) greets name and/or reverses arbitrary number of strings (using multiple parsers / cmds)
-
-Configure CMake with `CLAP_BUILD_EXAMPLES=ON` to build them.
+Options can be given as:
 
 ```
-$ ./fib
-Usage: fib [OPTION...] N
-Try 'fib --help' or 'fib --usage' for more information.
-
-$ ./fib --help
-Usage: fib [OPTION...] N
-fib -- clap example that prints a fibonacci number / sequence
-
-OPTIONS
-  -s, --sequence                print full sequence
-      --verbose                 verbose mode
-  -a, --arg-a=A                 start value of a
-  -b, --arg-b=B                 start value of b
-      --help                    Show this help text
-      --version                 Show version
-      --usage                   Show usage
-
-B must be > A
-
-$ ./fib 5
-5th Fibonacci number (0, 1): 3
-
-Powered by clap ^^ [-v0.2]
-
-$ ./fib --usage
-Usage: fib [-s] [-aA] [-bB] [--sequence] [--verbose] [--arg-a=A] [--arg-b=B] [--help] [--version] [--usage] N
-
-$ ./fib --verbose -s -a1 -b2 5
-
-input:
-        verbose         : true
-        sequence        : true
-        arg_a           : 1
-        arg_b           : 2
-        arg_n           : 5
-
-5th Fibonacci number (1, 2): 1 2 3 5 8
-
-Powered by clap ^^ [-v0.2]
-
-$ ./fib --version
-0.2
+-a
+ ^
+-ab
+ ^^
+--long
+  ^
+-abc=argument
+ ^^^ ~~~~~~~~
+-abc argument
+ ^^^ ~~~~~~~~
+-abcargument
+ ^^^~~~~~~~~
+--long=argument
+  ^    ~~~~~~~~
+--long argument
+  ^    ~~~~~~~~
 ```
 
-### Usage
+where `^` indicates an option and `~~~...` an argument. Here, `c` takes an argument while `a` and `b` do not.
 
-**Requirements**
+Additionally, anything after `--` will be parsed as a positional argument.
 
-- CMake
-- C++17 compiler (and stdlib)
+## Usage
 
-**Steps**
-
-1. Clone repo to appropriate subdirectory, say `clap`
-1. Add library to project via: `add_subdirectory(clap)` and `target_link_libraries(foo clap::clap)`
-1. Use via `#include <clap/clap.hpp>`
-1. Configure with `CLAP_BUILD_EXAMPLES=ON` to build the executables in `examples` (also adds tests)
-
-### Expression syntax
-
-```
-Syntax: [option...] [arg...] [cmd...]
-	cmd: cmd_key [option...] [arg...]
-	cmd_key (regex): [A-z]+
-	option (no / optional argument): -keylist | -option_key[=arg] | --option_name[=arg]
-	option (required argument): -option_keyarg | -option_key arg | -option_key=arg | --option_name=arg
-	option_key (regex): [A-z]
-	option_name (regex): [A-z]+
-	keylist (only options without arguments): -option_key0[option_key1...]
+```cpp
+#include <clap/options.hpp>
 ```
 
-### Contributing
+Create a `clap::Options` instance.
+
+```cpp
+auto options = clap::Options{
+  "program name",
+  "description of program",
+  "version string",
+};
+```
+
+Options are set up by passing a binding reference and the relevant metadata.
+
+```cpp
+struct {
+  bool debug{};
+  int log_level{3};
+
+  struct {
+    std::string field{"name"};
+    bool enabled{};
+  } sort{};
+
+} input{};
+
+options
+  // bind an option that's a boolean flag
+  .flag(input.debug, "d,debug", "enable debugging")
+  // bind an option that requires an int argument
+  .required(input.log_level, "log-level", "set the log level", "3")
+  // bind an option that takes an optional string argument
+  .optional(input.sort.field, input.sort.enabled, "s,sort", "sort by", "name|date");
+```
+
+Options are declared with a long and an optional short option. A description must be provided. Any type can be given as long as it can be parsed with `operator>>`. Options taking arguments also require usage text. Options with optional arguments require an additional `bool` flag that's set when the option is passed, regardless of the presence of the argument.
+
+To parse the command line (and set all the bound references to parsed incoming arguments):
+
+```cpp
+auto result = options.parse(argc, argv);
+```
+
+The returned result is simply an enum, and can be used to check whether to continue execution and what code to return:
+
+```cpp
+if (clap::should_quit(result)) { return clap::return_code(result); }
+```
+
+### Lists of arguments
+
+Options taking arguments can be bound to `std::vector`s if multiple options are expected to be passed. The vector will be filled in order of the occurrence of the option.
+
+```cpp
+auto defines = std::vector<std::string>{};
+
+options.required(defines, "D,define", "Pass a preprocessor define", "VALUE");
+```
+
+### Positional arguments
+
+Positional arguments are those given without a preceding flag and can be used alongside non-positional arguments. Set up positional arguments in order:
+
+```cpp
+struct {
+  std::string source{};
+  std::string destination{};
+} args{};
+
+options
+  .positional(args.source, "src")
+  .positional(args.destination, "dst");
+```
+
+Sample input:
+
+```
+program a.txt out/b.txt
+        ^~~~^ ^~~~~~~~^
+         src     dst
+```
+
+### Unmatched arguments
+
+By default, arguments not matched to any bound option will result in an error. To instead accept them into an ordered vector:
+
+```cpp
+auto paths = std::vector<std::string>{};
+options.unmatched(paths, "paths");
+```
+
+### Built-in options
+
+These options are added on a call to `parse()`, and handled by the library:
+
+```
+--help
+--version
+```
+
+### Gotchas
+
+1. Adding options with duplicate / repeated keys causes undefined behaviour.
+    1. This includes built-in options.
+1. All references bound to an `Options` object must outlive all calls to `parse()` on it.
+
+## Example
+
+Check out the swanky fibonacci number printer [example](example/fib.cpp).
+
+## Contributing
 
 Pull/merge requests are welcome.
 
