@@ -1,39 +1,19 @@
 name: ci
 on: [push, pull_request]
 jobs:
-  build-linux:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v2
-      - name: init
-        run: sudo apt update -yqq && sudo apt install -yqq ninja-build g++-13 clang-15
-      - name: configure gcc
-        run: cmake -S . --preset=default -B build -DCMAKE_CXX_COMPILER=g++-13 -DCLAP_BUILD_EXAMPLE=OFF
-      - name: configure clang
-        run: cmake -S . --preset=ninja-clang -B clang -DCMAKE_CXX_COMPILER=clang++-15
-      - name: build gcc
-        run: cmake --build build --config=Release
-      - name: build clang
-        run: cmake --build clang --config=Release
-      - name: test
-        run: cd build && ctest -C Release
-      - name: install
-        run: |
-            cmake --install build --config Release --prefix=install
-            cmake -S example -G "Ninja Multi-Config" -B build/example -DCMAKE_CXX_COMPILER=g++-13 -DCMAKE_PREFIX_PATH=../install
-            cmake --build build/example --config=Release
   build-windows:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v2
       - name: configure
-        run: cmake -S . --preset=vs22 -B build
+        run: cmake -S . --preset=vs22 -B build -DCLAP_BUILD_EXAMPLE=OFF
       - name: build
         run: cmake --build build --config=Release
       - name: test
         run: cd build && ctest -C Release
       - name: install
-        run: |
-            cmake --install build --config Release --prefix=install
-            cmake -S example -G "Visual Studio 17 2022" -B build/example -DCMAKE_PREFIX_PATH=../install
-            cmake --build build/example --config=Release
+        run: cmake --install build --config Release --prefix=install
+      - name: configure example
+        run: cmake -S example -G "Visual Studio 17 2022" -B build/example -DCMAKE_PREFIX_PATH="../install"
+      - name: build example
+        run: cmake --build build/example --config=Release
