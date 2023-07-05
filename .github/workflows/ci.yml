@@ -6,11 +6,11 @@ jobs:
     steps:
       - uses: actions/checkout@v2
       - name: init
-        run: sudo apt update -yqq && sudo apt install -yqq ninja-build g++-13
+        run: sudo apt update -yqq && sudo apt install -yqq ninja-build g++-13 clang-15
       - name: configure gcc
         run: cmake -S . --preset=default -B build -DCMAKE_CXX_COMPILER=g++-13
       - name: configure clang
-        run: cmake -S . --preset=ninja-clang -B clang
+        run: cmake -S . --preset=ninja-clang -B clang -DCMAKE_CXX_COMPILER=clang++-15
       - name: build gcc
         run: cmake --build build --config=Release
       - name: build clang
