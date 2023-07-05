@@ -50,8 +50,10 @@ void run_test(std::string_view name, F func) {
 } // namespace
 
 namespace {
+using CString = char const*;
+
 void long_option_implicit() {
-	auto const input = std::array{"--long-option"};
+	CString const input[]{"--long-option"};
 	auto parser = Parser{.input = input};
 	bool long_option{};
 	parser.spec.options.push_back({.key = "long-option", .out_was_passed = &long_option});
@@ -62,7 +64,7 @@ void long_option_implicit() {
 }
 
 void long_option_explicit() {
-	auto const input = std::array{"--long-option=false"};
+	CString const input[]{"--long-option=false"};
 	auto parser = Parser{.input = input};
 	bool long_option{};
 	parser.spec.options.push_back({.key = "long-option", .argument = Argument{.from_string = make_from_string(long_option)}});
@@ -78,7 +80,7 @@ void positional() {
 		std::string_view second{};
 		int third{};
 	} data{};
-	auto const input = std::array{"foo", "bar", "42"};
+	CString const input[]{"foo", "bar", "42"};
 	auto parser = Parser{.input = input};
 	parser.spec.positional = {
 		Option{.key = "first", .argument = Argument{.from_string = make_from_string(data.first)}},
@@ -100,7 +102,7 @@ void short_options() {
 		bool bar{};
 		bool verbose{};
 	} data{};
-	auto const input = std::array{"-vbf=42"};
+	CString const input[]{"-vbf=42"};
 	auto parser = Parser{.input = input};
 	parser.spec.options = {
 		Option{.key = "foo", .letter = 'f', .argument = Argument{.from_string = make_from_string(data.foo)}},
@@ -121,7 +123,7 @@ void short_concat() {
 		bool bar{};
 		bool verbose{};
 	} data{};
-	auto const input = std::array{"-vbf42"};
+	CString const input[]{"-vbf42"};
 	auto parser = Parser{.input = input};
 	parser.spec.options = {
 		Option{.key = "foo", .letter = 'f', .argument = Argument{.from_string = make_from_string(data.foo)}},
@@ -141,7 +143,7 @@ void short_spaced() {
 		bool bar{};
 		bool verbose{};
 	} data{};
-	auto const input = std::array{"-vbf", "42"};
+	CString const input[]{"-vbf", "42"};
 	auto parser = Parser{.input = input};
 	parser.spec.options = {
 		Option{.key = "foo", .letter = 'f', .argument = Argument{.from_string = make_from_string(data.foo)}},
@@ -163,7 +165,7 @@ void long_positional() {
 		int third{};
 		bool verbose{};
 	} data{};
-	auto const input = std::array{"foo", "bar", "--verbose", "42"};
+	CString const input[]{"foo", "bar", "--verbose", "42"};
 	auto parser = Parser{.input = input};
 	parser.spec.options.push_back({.key = "verbose", .out_was_passed = &data.verbose});
 	parser.spec.positional = {
@@ -182,7 +184,7 @@ void long_positional() {
 }
 
 void missing_required_arg() {
-	auto const input = std::array{"--long-option"};
+	CString const input[]{"--long-option"};
 	auto parser = Parser{.input = input};
 	bool long_option{};
 	parser.spec.options.push_back(Option{.key = "long-option", .argument = Argument{.from_string = make_from_string(long_option), .required = true}});
@@ -198,7 +200,7 @@ void missing_required_arg() {
 }
 
 void unexpected_arg() {
-	auto const input = std::array{"--long-option=foobar"};
+	CString const input[]{"--long-option=foobar"};
 	auto parser = Parser{.input = input};
 	parser.spec.options.push_back({.key = "long-option"});
 
@@ -213,7 +215,7 @@ void unexpected_arg() {
 }
 
 void invalid_value() {
-	auto const input = std::array{"-ofoobar"};
+	CString const input[]{"-ofoobar"};
 	auto parser = Parser{.input = input};
 	auto foobar = int{};
 	parser.spec.options.push_back({.key = "option", .letter = 'o', .argument = Argument{.from_string = make_from_string(foobar)}});
@@ -238,7 +240,7 @@ void full_parse() {
 		std::vector<std::string> defines{};
 		std::vector<std::string> files{};
 	} data{};
-	auto const input = std::array{"compile", "-vl=3", "-DFOO", "-DBAR", "-O2", "--fsanitize=address", "a.cpp", "b.cpp"};
+	CString const input[]{"compile", "-vl=3", "-DFOO", "-DBAR", "-O2", "--fsanitize=address", "a.cpp", "b.cpp"};
 	auto parser = Parser{.input = input};
 	parser.spec.options = {
 		{.key = "verbose", .letter = 'v', .out_was_passed = &data.verbose},

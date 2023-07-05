@@ -5,8 +5,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
+      - name: init
+        run: sudo apt update -yqq && sudo apt install -yqq ninja-build g++-13
       - name: configure gcc
-        run: cmake -S . --preset=default -B build
+        run: cmake -S . --preset=default -B build -DCMAKE_CXX_COMPILER=g++-13
       - name: configure clang
         run: cmake -S . --preset=ninja-clang -B clang
       - name: build gcc
