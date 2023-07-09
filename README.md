@@ -143,6 +143,109 @@ These options are added on a call to `parse()`, and handled by the library:
     1. This includes built-in options.
 1. All references bound to an `Options` object must outlive all calls to `parse()` on it.
 
+## Adding to a project
+
+### Requirements
+
+1. CMake 3.23+
+1. C++20 compiler and standard library
+
+### Summary
+
+`clap` supports the following ways of integration:
+
+1. Vendored in a project.
+    1. Recommended: use CMake `FetchContent`.
+    1. Alternatively, use git submodules / an archive in the repository and `add_subdirectory(path/to/clap)`.
+1. Installed separately.
+    1. Recommended: use vcpkg to create an overlay-port with the latest version of `clap`.
+    1. Use `find_package(clap CONFIG REQUIRED)` in project CMake.
+
+However the package is sourced / located, use `target_link_libraries(your-target [PRIVATE|PUBLIC] clap::clap)` to link. No other steps are needed (eg setting include paths).
+
+### vcpkg example
+
+Create the following files:
+
+```
+repo_root/
+  vcpkg.json
+  vcpkg/ports
+    clap/
+      portfile.cmake
+      vcpkg.json
+```
+
+vcpkg.json:
+
+```json
+{
+  "name": "test",
+  "version": "0.1",
+  "dependencies": [
+    "clap"
+  ],
+  "vcpkg-configuration": {
+    "overlay-ports": [
+      "./vcpkg/ports/clap"
+    ]
+  }
+}
+```
+
+vcpkg/ports/clap/vcpkg.json:
+
+```json
+{
+  "name": "clap",
+  "version": "0.4.2",
+  "description": "command line argument parser",
+  "dependencies": [
+    {
+      "name": "vcpkg-cmake",
+      "host": true
+    }
+  ]
+}
+```
+
+vcpkg/ports/clap/portfile.cmake:
+
+```cmake
+# setup the source metadata
+vcpkg_from_github(
+  OUT_SOURCE_PATH SOURCE_PATH
+  REPO karnkaul/clap
+  REF cmake-package
+  SHA512 0 # obtain the SHA by running vcpkg-install
+  HEAD_REF main
+)
+
+# configure through CMake
+vcpkg_cmake_configure(SOURCE_PATH ${SOURCE_PATH})
+
+# install through CMake
+vcpkg_cmake_install()
+
+# install copyright (required by vcpkg)
+file(INSTALL "${SOURCE_PATH}/LICENSE" DESTINATION "${CURRENT_PACKAGES_DIR}/share/clap" RENAME copyright)
+
+# remove unnecessary files (otherwise vcpkg will warn about them)
+file(REMOVE_RECURSE "${CURRENT_PACKAGES_DIR}/debug/include")
+file(REMOVE_RECURSE "${CURRENT_PACKAGES_DIR}/debug/share")
+```
+
+Make sure to pass the path to your locally installed vcpkg toolchain file. Through CMake presets:
+
+```json
+"configurePresets": [
+  {
+    "name": "default",
+    "toolchainFile": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake"
+  }
+]
+```
+
 ## Example
 
 Check out the swanky fibonacci number printer [example](example/fib.cpp).
