@@ -1,6 +1,6 @@
-cmake_minimum_required(VERSION 3.18)
+cmake_minimum_required(VERSION 3.23)
 
-project(clap VERSION "0.4.1")
+project(clap VERSION "0.4.2")
 
 set(is_root_project OFF)
 
@@ -15,11 +15,11 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 option(CLAP_BUILD_EXAMPLE "Build clap example" ${is_root_project})
 option(CLAP_BUILD_TEST "Build clap tests" ${is_root_project})
 
-add_library(compile-options INTERFACE)
-add_library(${PROJECT_NAME}::compile-options ALIAS compile-options)
+add_library(${PROJECT_NAME}-compile-options INTERFACE)
+add_library(${PROJECT_NAME}::${PROJECT_NAME}-compile-options ALIAS ${PROJECT_NAME}-compile-options)
 
 if(CMAKE_CXX_COMPILER_ID STREQUAL Clang OR CMAKE_CXX_COMPILER_ID STREQUAL GNU)
-  target_compile_options(compile-options INTERFACE
+  target_compile_options(${PROJECT_NAME}-compile-options INTERFACE
     -Wall -Wextra -Wpedantic -Wconversion -Werror=return-type
   )
 endif()
@@ -29,32 +29,30 @@ add_library(clap::clap ALIAS clap)
 
 target_compile_features(clap PUBLIC cxx_std_20)
 
-target_include_directories(clap SYSTEM INTERFACE
-  "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>"
+target_include_directories(clap PUBLIC
   "$<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}/include>"
-  $<INSTALL_INTERFACE:include>
 )
 
 target_include_directories(clap PRIVATE
-  include
   .
-  "${CMAKE_CURRENT_BINARY_DIR}/include"
 )
 
 target_link_libraries(${PROJECT_NAME} PRIVATE
-  ${PROJECT_NAME}::compile-options
+  ${PROJECT_NAME}::${PROJECT_NAME}-compile-options
 )
 
 target_sources(clap PRIVATE
-  include/clap/detail/from_string.hpp
-  include/clap/clap.hpp
-
   src/clap.cpp
   src/parser.cpp
   src/parser.hpp
 )
 
-get_target_property(sources clap SOURCES)
+target_sources(clap PUBLIC FILE_SET HEADERS BASE_DIRS include FILES
+  include/clap/detail/from_string.hpp
+  include/clap/clap.hpp
+)
+
+get_target_property(sources ${PROJECT_NAME} SOURCES)
 source_group(TREE "${CMAKE_CURRENT_SOURCE_DIR}" FILES ${sources})
 configure_file(src/build_version.hpp.in "${CMAKE_CURRENT_BINARY_DIR}/include/clap/build_version.hpp")
 source_group("include/clap" FILES "${CMAKE_CURRENT_BINARY_DIR}/include/clap/build_version.hpp")
@@ -77,16 +75,11 @@ if(CLAP_INSTALL)
 
   install(TARGETS
     ${PROJECT_NAME}
-    compile-options
+    ${PROJECT_NAME}-compile-options
 
     EXPORT ${PROJECT_NAME}-targets
-  )
 
-  install(DIRECTORY
-    include/
-
-    DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
-    FILES_MATCHING PATTERN "*.hpp"
+    FILE_SET HEADERS
   )
 
   install(FILES

@@ -143,6 +143,27 @@ These options are added on a call to `parse()`, and handled by the library:
     1. This includes built-in options.
 1. All references bound to an `Options` object must outlive all calls to `parse()` on it.
 
+## Adding to a project
+
+### Requirements
+
+1. CMake 3.23+
+1. C++20 compiler and standard library
+
+### Summary
+
+`clap` supports the following ways of integration:
+
+1. Vendored in a project.
+    1. Recommended: use CMake `FetchContent`.
+    1. Alternatively, use git submodules / an archive in the repository and `add_subdirectory(path/to/clap)`.
+1. Installed separately.
+    1. Recommended: use vcpkg and create an overlay-port with the desired version of `clap` (v0.4.2 or newer) in the project.
+    1. Alternatively, install `clap` somewhere manually via `cmake --install --prefix=<install_path>` and pass `-DCMAKE_PREFIX_PATH=<install_path>` at configure time.
+    1. Use `find_package(clap CONFIG REQUIRED)` in the project's CMake script.
+
+However the package is sourced / located, use `target_link_libraries(your-target [PRIVATE|PUBLIC] clap::clap)` to link. No other steps are needed (eg setting include paths).
+
 ## Example
 
 Check out the swanky fibonacci number printer [example](example/fib.cpp).
