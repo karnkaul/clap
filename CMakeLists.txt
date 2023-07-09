@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.18)
+cmake_minimum_required(VERSION 3.23)
 
 project(clap VERSION "0.4.1")
 
@@ -29,16 +29,12 @@ add_library(clap::clap ALIAS clap)
 
 target_compile_features(clap PUBLIC cxx_std_20)
 
-target_include_directories(clap SYSTEM INTERFACE
-  "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>"
+target_include_directories(clap PUBLIC
   "$<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}/include>"
-  $<INSTALL_INTERFACE:include>
 )
 
 target_include_directories(clap PRIVATE
-  include
   .
-  "${CMAKE_CURRENT_BINARY_DIR}/include"
 )
 
 target_link_libraries(${PROJECT_NAME} PRIVATE
@@ -46,12 +42,14 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
 )
 
 target_sources(clap PRIVATE
-  include/clap/detail/from_string.hpp
-  include/clap/clap.hpp
-
   src/clap.cpp
   src/parser.cpp
   src/parser.hpp
+)
+
+target_sources(clap PUBLIC FILE_SET HEADERS BASE_DIRS include FILES
+  include/clap/detail/from_string.hpp
+  include/clap/clap.hpp
 )
 
 get_target_property(sources clap SOURCES)
@@ -80,13 +78,8 @@ if(CLAP_INSTALL)
     compile-options
 
     EXPORT ${PROJECT_NAME}-targets
-  )
 
-  install(DIRECTORY
-    include/
-
-    DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
-    FILES_MATCHING PATTERN "*.hpp"
+    FILE_SET HEADERS
   )
 
   install(FILES
