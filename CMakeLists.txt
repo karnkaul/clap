@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.23)
 
-project(clap VERSION "0.4.2")
+project(clap VERSION "0.4.3")
 
 set(is_root_project OFF)
 

@@ -7,7 +7,7 @@
 
 namespace clap::detail {
 template <typename Type>
-bool parse_string(std::string_view value, Type& out) {
+auto parse_string(std::string_view value, Type& out) -> bool {
 	if constexpr (std::same_as<bool, Type>) {
 		out = value == "true";
 		return true;
@@ -34,16 +34,16 @@ struct Argument {
 };
 
 template <typename Type>
-FromString make_from_string(Type& out) {
+auto make_from_string(Type& out) -> FromString {
 	return [&out](std::string_view value) { return parse_string(value, out); };
 }
 
 template <typename Type>
-FromString make_from_string(std::vector<Type>& out) {
+auto make_from_string(std::vector<Type>& out) -> FromString {
 	return [&out](std::string_view value) {
-		auto t = Type{};
-		if (parse_string(value, t)) {
-			out.push_back(t);
+		auto type = Type{};
+		if (parse_string(value, type)) {
+			out.push_back(std::move(type));
 			return true;
 		}
 		return false;

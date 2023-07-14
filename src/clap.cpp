@@ -3,6 +3,7 @@
 #include <cassert>
 #include <filesystem>
 #include <format>
+#include <iostream>
 
 namespace clap {
 namespace fs = std::filesystem;
@@ -15,7 +16,7 @@ struct Spec {
 	std::string version{};
 	OptionSpec options{};
 
-	static Option make_option(std::string group, std::string description) {
+	static auto make_option(std::string group, std::string description) -> Option {
 		auto ret = Option{.description = std::move(description)};
 		if (group.size() > 2 && group[1] == ',') {
 			ret.letter = group[0];
@@ -28,7 +29,7 @@ struct Spec {
 	}
 };
 
-std::uint32_t compute_width(Option const& option) {
+auto compute_width(Option const& option) -> std::uint32_t {
 	auto ret = static_cast<std::uint32_t>(option.key.size()) + 2;
 	if (option.argument) {
 		ret += static_cast<std::uint32_t>(option.argument.usage.size());
@@ -37,14 +38,14 @@ std::uint32_t compute_width(Option const& option) {
 	return ret;
 }
 
-std::uint32_t compute_max_width(std::span<Option const> options) {
+auto compute_max_width(std::span<Option const> options) -> std::uint32_t {
 	auto ret = std::uint32_t{};
 	for (auto const& option : options) { ret = std::max(ret, compute_width(option)); }
 	return ret;
 }
 
 void print_letter_to(std::string& out, char const letter, bool print_blanks) {
-	if (letter) {
+	if (letter != 0) {
 		std::format_to(std::back_inserter(out), "-{}, ", letter);
 	} else if (print_blanks) {
 		out += std::string(4, ' ');
@@ -72,12 +73,12 @@ struct Options::Impl {
 			std::format_to(std::back_inserter(usage), "<{}> ", positional.argument.usage);
 		}
 		if (spec.options.unmatched.argument) { std::format_to(std::back_inserter(usage), "{}", spec.options.unmatched.argument.usage); }
-		std::fprintf(stdout, "%s\n", usage.c_str());
+		std::cout << std::format("{}\n", usage);
 
-		std::fprintf(stdout, "\n%s\n", spec.description.c_str());
+		std::cout << std::format("\n{}\n", spec.description);
 
 		if (!spec.options.options.empty()) {
-			std::fprintf(stdout, "\nOPTIONS\n\n");
+			std::cout << "\nOPTIONS\n\n";
 			auto const max_width = compute_max_width(spec.options.options) + 12;
 			for (auto const& option : spec.options.options) {
 				auto text = std::string{"  "};
@@ -86,14 +87,15 @@ struct Options::Impl {
 
 				text += std::string(static_cast<std::size_t>(max_width) - text.size(), ' ');
 				std::format_to(std::back_inserter(text), "{}", option.description);
-				std::fprintf(stdout, "%s\n", text.c_str());
+				std::cout << std::format("{}\n", text);
 			}
 		}
 
-		if (!spec.footer.empty()) { std::fprintf(stdout, "\n%s\n", spec.footer.c_str()); }
+		if (!spec.footer.empty()) { std::cout << std::format("\n{}\n", spec.footer); }
 	}
 };
 
+// NOLINTNEXTLINE
 void Options::Deleter::operator()(Impl const* ptr) const { delete ptr; }
 
 Options::Options(std::string app_name, std::string description, std::string version) : m_impl(new Impl{}) {
@@ -104,19 +106,19 @@ Options::Options(std::string app_name, std::string description, std::string vers
 	};
 }
 
-Options& Options::set_footer(std::string footer) {
+auto Options::set_footer(std::string footer) -> Options& {
 	m_impl->spec.footer = std::move(footer);
 	return *this;
 }
 
-Options& Options::flag(bool& out_flag, std::string group, std::string description) {
+auto Options::flag(bool& out_flag, std::string group, std::string description) -> Options& {
 	auto flag = Spec::make_option(std::move(group), std::move(description));
 	flag.out_was_passed = &out_flag;
 	if (!flag.key.empty()) { m_impl->spec.options.options.push_back(std::move(flag)); }
 	return *this;
 }
 
-Options& Options::bind_option(bool* out_was_passed, detail::Argument argument, std::string group, std::string description) {
+auto Options::bind_option(bool* out_was_passed, detail::Argument argument, std::string group, std::string description) -> Options& {
 	auto option = Spec::make_option(std::move(group), std::move(description));
 	if (option.key.empty()) { return *this; }
 	option.out_was_passed = out_was_passed;
@@ -125,7 +127,7 @@ Options& Options::bind_option(bool* out_was_passed, detail::Argument argument, s
 	return *this;
 }
 
-Options& Options::bind_positional(detail::FromString from_string, std::string key, std::string usage) {
+auto Options::bind_positional(detail::FromString from_string, std::string key, std::string usage) -> Options& {
 	auto positional = Option{.key = std::move(key)};
 	if (positional.key.empty()) { return *this; }
 	if (usage.empty()) { usage = positional.key; }
@@ -134,12 +136,12 @@ Options& Options::bind_positional(detail::FromString from_string, std::string ke
 	return *this;
 }
 
-Options& Options::bind_unmatched(detail::FromString from_string, std::string usage) {
+auto Options::bind_unmatched(detail::FromString from_string, std::string usage) -> Options& {
 	m_impl->spec.options.unmatched.argument = detail::Argument{.usage = std::move(usage), .from_string = std::move(from_string)};
 	return *this;
 }
 
-Result Options::parse(std::span<char const* const> args) {
+auto Options::parse(std::span<char const* const> args) -> Result {
 	struct {
 		bool help{};
 		bool version{};
@@ -153,33 +155,30 @@ Result Options::parse(std::span<char const* const> args) {
 	parser.spec.options.push_back(std::move(option));
 
 	try {
-		while (parser.parse_next())
-			;
+		while (parser.parse_next()) { ; }
 		if (data.help || data.version) {
 			if (data.help) {
 				m_impl->spec.options = std::move(parser.spec);
 				m_impl->print_help();
 			} else {
-				auto const msg = std::format("{} version {}\n", m_impl->spec.app_name, m_impl->spec.version);
-				std::fprintf(stdout, "%s", msg.c_str());
+				std::cout << std::format("{} version {}\n", m_impl->spec.app_name, m_impl->spec.version);
 			}
 			return Result::eExit;
 		}
 		if (parser.position < parser.spec.positional.size()) { throw Error{"missing {} operand", parser.spec.positional[parser.position].key}; }
 	} catch (Error const& error) {
-		auto const msg = std::format("{}: {}\nTry '{} --help' for more information.\n", m_impl->spec.app_name, error.what(), m_impl->spec.app_name);
-		std::fprintf(stderr, "%s", msg.c_str());
+		std::cerr << std::format("{}: {}\nTry '{} --help' for more information.\n", m_impl->spec.app_name, error.what(), m_impl->spec.app_name);
 		return Result::eParseError;
 	}
 
 	return Result::eContinue;
 }
 
-Result Options::parse(int argc, char const* const* argv, bool const parse_arg0) {
+auto Options::parse(int argc, char const* const* argv, bool const parse_arg0) -> Result {
 	auto span = std::span{argv, static_cast<std::size_t>(argc)};
 	if (!parse_arg0 && !span.empty()) { span = span.subspan(1); }
 	return parse(span);
 }
 } // namespace clap
 
-std::string clap::make_app_name(std::string_view const arg0) { return fs::path{arg0}.stem().string(); }
+auto clap::make_app_name(std::string_view const arg0) -> std::string { return fs::path{arg0}.stem().string(); }
