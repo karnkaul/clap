@@ -12,8 +12,8 @@ namespace clap {
 /// operator>>(istream&, T&) must be overloaded.
 ///
 template <typename Type>
-concept ParseableT = requires(std::istream& i, Type& t) {
-	{ i >> t } -> std::convertible_to<std::istream&>;
+concept ParseableT = requires(std::istream& ins, Type& out) {
+	{ ins >> out } -> std::convertible_to<std::istream&>;
 };
 
 namespace detail {
@@ -57,7 +57,7 @@ class Options {
 	/// \brief Set the (optional) help footer text.
 	/// \param footer Text to display.
 	///
-	Options& set_footer(std::string footer);
+	auto set_footer(std::string footer) -> Options&;
 
 	///
 	/// \brief Bind an option with an implicit boolean value.
@@ -65,7 +65,7 @@ class Options {
 	/// \param group Group of option ("<key>" or "<letter>,<key>").
 	/// \param description Description of option (displayed in help).
 	///
-	Options& flag(bool& out_flag, std::string group, std::string description);
+	auto flag(bool& out_flag, std::string group, std::string description) -> Options&;
 
 	///
 	/// \brief Bind an option with a required argument.
@@ -75,7 +75,7 @@ class Options {
 	/// \param usage Usage text.
 	///
 	template <BindableT Type>
-	Options& required(Type& out, std::string group, std::string description, std::string usage) {
+	auto required(Type& out, std::string group, std::string description, std::string usage) -> Options& {
 		auto arg = detail::Argument{.usage = std::move(usage), .from_string = detail::make_from_string(out), .required = true};
 		return bind_option({}, std::move(arg), std::move(group), std::move(description));
 	}
@@ -89,7 +89,7 @@ class Options {
 	/// \param out_was_passed Flag that's set if option is passed, regardless of argument presence.
 	///
 	template <BindableT Type>
-	Options& optional(Type& out, bool& out_was_passed, std::string group, std::string description, std::string usage) {
+	auto optional(Type& out, bool& out_was_passed, std::string group, std::string description, std::string usage) -> Options& {
 		auto arg = detail::Argument{.usage = std::move(usage), .from_string = detail::make_from_string(out)};
 		return bind_option(&out_was_passed, std::move(arg), std::move(group), std::move(description));
 	}
@@ -101,7 +101,7 @@ class Options {
 	/// \param usage Usage text, if different from operand.
 	///
 	template <ParseableT Type>
-	Options& positional(Type& out, std::string operand, std::string usage = {}) {
+	auto positional(Type& out, std::string operand, std::string usage = {}) -> Options& {
 		return bind_positional(detail::make_from_string(out), std::move(operand), std::move(usage));
 	}
 
@@ -111,7 +111,7 @@ class Options {
 	/// \param usage Usage text.
 	///
 	template <ParseableT Type>
-	Options& unmatched(std::vector<Type>& out, std::string usage) {
+	auto unmatched(std::vector<Type>& out, std::string usage) -> Options& {
 		return bind_unmatched(detail::make_from_string(out), std::move(usage));
 	}
 
@@ -120,7 +120,7 @@ class Options {
 	/// \returns Result of parsing.
 	/// \param args range of strings to parse.
 	///
-	Result parse(std::span<char const* const> args);
+	auto parse(std::span<char const* const> args) -> Result;
 
 	///
 	/// \brief Parse arguments to main.
@@ -129,13 +129,13 @@ class Options {
 	/// \param argv Second argument to main.
 	/// \param parse_arg0 Whether to parse the argv[0] as an option (otherwise skip it).
 	///
-	Result parse(int argc, char const* const* argv, bool const parse_arg0 = false);
+	auto parse(int argc, char const* const* argv, bool parse_arg0 = false) -> Result;
 
   private:
-	Options& bind_option(bool* out_was_passed, detail::Argument argument, std::string group, std::string description);
-	Options& bind_positional(detail::FromString from_string, std::string key, std::string usage);
-	Options& bind_unmatched(detail::FromString from_string, std::string usage);
-	void print_help();
+	auto bind_option(bool* out_was_passed, detail::Argument argument, std::string group, std::string description) -> Options&;
+	auto bind_positional(detail::FromString from_string, std::string key, std::string usage) -> Options&;
+	auto bind_unmatched(detail::FromString from_string, std::string usage) -> Options&;
+	auto print_help() -> void;
 
 	struct Impl;
 	struct Deleter {
@@ -148,17 +148,17 @@ class Options {
 ///
 /// \brief Check if application should quit.
 ///
-constexpr bool should_quit(Result const result) { return result != Result::eContinue; }
+constexpr auto should_quit(Result const result) -> bool { return result != Result::eContinue; }
 
 ///
 /// \brief Obtain the return code.
 /// \returns EXIT_FAILURE if parse_error(), else EXIT_SUCCESS.
 ///
-constexpr int return_code(Result const result) { return result == Result::eParseError ? EXIT_FAILURE : EXIT_SUCCESS; }
+constexpr auto return_code(Result const result) -> int { return result == Result::eParseError ? EXIT_FAILURE : EXIT_SUCCESS; }
 
 ///
 /// \brief Obtain the app name from the first argument to main.
 /// \returns std::filesystem::path(arg0).stem().
 ///
-std::string make_app_name(std::string_view const arg0);
+auto make_app_name(std::string_view arg0) -> std::string;
 } // namespace clap

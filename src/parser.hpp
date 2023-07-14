@@ -39,11 +39,11 @@ struct OptionSpec {
 */
 
 struct Parser {
-	static Error invalid_option(std::string_view option);
-	static Error unrecognized_argument(std::string_view argument);
-	static Error unexpected_argument(std::string_view option);
-	static Error argument_required(std::string_view option);
-	static Error invalid_value(std::string_view option, std::string_view value);
+	static auto invalid_option(std::string_view option) -> Error;
+	static auto unrecognized_argument(std::string_view argument) -> Error;
+	static auto unexpected_argument(std::string_view option) -> Error;
+	static auto argument_required(std::string_view option) -> Error;
+	static auto invalid_value(std::string_view option, std::string_view value) -> Error;
 
 	std::span<char const* const> input{};
 	OptionSpec spec{};
@@ -52,7 +52,7 @@ struct Parser {
 	bool force_positional{};
 	std::size_t position{};
 
-	bool parse_next();
+	auto parse_next() -> bool;
 
 	void argument();
 	void option();
@@ -60,8 +60,8 @@ struct Parser {
 	void long_option();
 	void short_options();
 
-	bool at_end() const { return input.empty(); }
-	std::string_view peek() const { return at_end() ? std::string_view{} : input[0]; }
-	bool advance();
+	[[nodiscard]] auto at_end() const -> bool { return input.empty(); }
+	[[nodiscard]] auto peek() const -> std::string_view { return at_end() ? std::string_view{} : input[0]; }
+	auto advance() -> bool;
 };
 } // namespace clap
