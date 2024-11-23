@@ -1,0 +1,7 @@
+[ ] refactor: bcArg
+  - bind via Arg objects
+  - reduce allocs
+  - flags can only be true, take no value
+[ ] fixups
+  [ ] next_argument() approach is incorrect for commands: must match by name
+  [ ] ^ implies: nested command support is tricky, can special-case first argument in comparison
