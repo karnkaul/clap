@@ -131,7 +131,7 @@ TEST_CASE(parser_required) {
 		outcome = get_outcome(parameters, {"42", "y", "foo"});
 	} catch (detail::error::Parse const error) {
 		thrown = true;
-		EXPECT(error == detail::error::Parse::ExtraneousArgument);
+		EXPECT(error == detail::error::Parse::UnknownArgument);
 	}
 	EXPECT(thrown);
 }
@@ -170,7 +170,7 @@ TEST_CASE(parser_optional) {
 		outcome = get_outcome(parameters, {"x", "42", "foo"});
 	} catch (detail::error::Parse const error) {
 		thrown = true;
-		EXPECT(error == detail::error::Parse::ExtraneousArgument);
+		EXPECT(error == detail::error::Parse::UnknownArgument);
 	}
 	EXPECT(thrown);
 }

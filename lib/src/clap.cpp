@@ -162,7 +162,7 @@ void Parser::parse_argument() {
 	if (m_positional_index >= m_positional_parameters.size()) {
 		if (!m_list_parameter) {
 			// TODO: print error
-			throw error::Parse{error::Parse::ExtraneousArgument};
+			throw error::Parse{error::Parse::UnknownArgument};
 		}
 		if (!m_list_parameter->parse(m_current.lexeme)) {
 			// TODO: print error
@@ -202,36 +202,26 @@ void Parser::parse_long_option() {
 		return;
 	}
 
-	auto const* named = find_named(word);
-	if (!named) {
-		// TODO: print error
-		throw error::Parse{error::Parse::InvalidArgument};
-	}
-
+	auto const& named = get_named(word);
 	advance();
-	parse_last_option(*named);
+	parse_last_option(named);
 }
 
 void Parser::parse_short_options() {
 	assert(m_current.lexeme.front() == '-');
 	auto letters = m_current.lexeme.substr(1);
 	for (; letters.size() > 1; letters.remove_prefix(1)) {
-		auto const* named = find_named(letters.front());
-		if (!named || !named->is_flag) {
+		auto const& named = get_named(letters.front());
+		if (!named.is_flag) {
 			// TODO: print error
 			throw error::Parse{error::Parse::OptionRequiresArgument};
 		}
-		named->parse("true");
+		named.parse("true");
 	}
 
-	auto const* named = find_named(letters.front());
-	if (!named) {
-		// TODO: print error
-		throw error::Parse{error::Parse::InvalidArgument};
-	}
-
+	auto const& named = get_named(letters.front());
 	advance();
-	parse_last_option(*named);
+	parse_last_option(named);
 }
 
 void Parser::parse_last_option(parameter::Named const& named) {
@@ -248,7 +238,7 @@ void Parser::parse_last_option(parameter::Named const& named) {
 
 	if (m_current.type != Token::Type::String) {
 		// TODO: print error
-		throw error::Parse{error::Parse::MissingRequiredArgument};
+		throw error::Parse{error::Parse::OptionRequiresArgument};
 	}
 
 	parse_option_value(named);
@@ -257,7 +247,7 @@ void Parser::parse_last_option(parameter::Named const& named) {
 void Parser::parse_option_value(parameter::Named const& named) {
 	if (m_current.type != Token::Type::String) {
 		// TODO: print error
-		throw error::Parse{error::Parse::InvalidArgument};
+		throw error::Parse{error::Parse::OptionRequiresArgument};
 	}
 
 	if (!named.parse(m_current.lexeme)) {
@@ -268,22 +258,22 @@ void Parser::parse_option_value(parameter::Named const& named) {
 	advance();
 }
 
-auto Parser::find_named(std::string_view const word) const -> parameter::Named const* {
-	auto const it = std::ranges::find_if(m_named_parameters, [word](parameter::Named const* p) { return p->word == word; });
-	if (it == m_named_parameters.end()) { return nullptr; }
-	return *it;
-}
-
-auto Parser::find_named(char const letter) const -> parameter::Named const* {
-	auto const it = std::ranges::find_if(m_named_parameters, [letter](parameter::Named const* p) { return p->letter == letter; });
-	if (it == m_named_parameters.end()) { return nullptr; }
-	return *it;
-}
-
 auto Parser::find_command(std::string_view const identifier) const -> Command const* {
 	auto const it = std::ranges::find_if(m_commands, [identifier](Command const& c) { return c.identifier == identifier; });
 	if (it == m_commands.end()) { return nullptr; }
 	return &*it;
+}
+
+auto Parser::get_named(char const letter) const -> parameter::Named const& {
+	auto const it = std::ranges::find_if(m_named_parameters, [letter](parameter::Named const* p) { return p->letter == letter; });
+	if (it != m_named_parameters.end()) { return **it; }
+	throw error::Parse{error::Parse::UnrecognizedOption};
+}
+
+auto Parser::get_named(std::string_view const word) const -> parameter::Named const& {
+	auto const it = std::ranges::find_if(m_named_parameters, [word](parameter::Named const* p) { return p->word == word; });
+	if (it != m_named_parameters.end()) { return **it; }
+	throw error::Parse{error::Parse::UnrecognizedOption};
 }
 
 auto Parser::select_command() -> bool {
@@ -317,8 +307,9 @@ void Parser::printerr(std::format_string<Args...> fmt, Args&&... args) const {
 
 auto detail::error::to_string_view(Parse const error) -> std::string_view {
 	switch (error) {
-	case Parse::ExtraneousArgument: return "ExtraneousArgument";
+	case Parse::UnknownArgument: return "UnknownArgument";
 	case Parse::InvalidArgument: return "InvalidArgument";
+	case Parse::UnrecognizedOption: return "UnrecognizedOption";
 	case Parse::OptionRequiresArgument: return "OptionRequiresArgument";
 	case Parse::MissingRequiredArgument: return "MissingRequiredArgument";
 	case Parse::UnexpectedToken: return "UnexpectedToken";

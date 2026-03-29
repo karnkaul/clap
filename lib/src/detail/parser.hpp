@@ -35,8 +35,9 @@ enum class Parameter : std::int8_t {
 };
 
 enum class Parse : std::int8_t {
-	ExtraneousArgument,
+	UnknownArgument,
 	InvalidArgument,
+	UnrecognizedOption,
 	OptionRequiresArgument,
 	MissingRequiredArgument,
 	UnexpectedToken,
@@ -66,9 +67,9 @@ class Parser {
 	void parse_last_option(parameter::Named const& named);
 	void parse_option_value(parameter::Named const& named);
 
-	[[nodiscard]] auto find_named(char letter) const -> parameter::Named const*;
-	[[nodiscard]] auto find_named(std::string_view word) const -> parameter::Named const*;
 	[[nodiscard]] auto find_command(std::string_view identifier) const -> Command const*;
+	[[nodiscard]] auto get_named(char letter) const noexcept(false) -> parameter::Named const&;
+	[[nodiscard]] auto get_named(std::string_view word) const noexcept(false) -> parameter::Named const&;
 
 	auto select_command() -> bool;
 	void check_required_parsed();
