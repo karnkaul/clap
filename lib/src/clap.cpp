@@ -305,6 +305,14 @@ auto detail::to_string_view(ParseError const error) -> std::string_view {
 	}
 }
 
+namespace parameter {
+auto Parse::operator()(std::string_view const input) const -> bool {
+	if (was_set) { *was_set = true; }
+	if (!func(input)) { return false; }
+	return true;
+}
+} // namespace parameter
+
 void parameter::split_named_key(std::string_view const key, char& out_letter, std::string_view& out_word) {
 	if (key.empty()) { return; }
 

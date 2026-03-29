@@ -49,18 +49,24 @@ template <ValueT T>
 	return true;
 }
 
-using Parse = std::function<bool(std::string_view)>;
+struct Parse {
+	auto operator()(std::string_view input) const -> bool;
+
+	std::function<bool(std::string_view)> func{};
+	bool* was_set{};
+};
 
 template <typename T>
-[[nodiscard]] auto create_parse(T& out) -> Parse {
-	return [&out](std::string_view const input) { return parse_to(out, input); };
+[[nodiscard]] auto create_parse(T& out, bool* was_set) -> Parse {
+	if (was_set) { *was_set = false; }
+	return Parse{.func = [&out](std::string_view const input) { return parse_to(out, input); }, .was_set = was_set};
 }
 
 struct Named {
 	template <typename T>
 		requires(ValueT<T> || FlagT<T>)
-	explicit Named(T& out, std::string_view const key, std::string_view const description = {})
-		: description(description), parse(create_parse(out)), is_flag(FlagT<T>) {
+	explicit Named(T& out, std::string_view const key, std::string_view const description, bool* was_set)
+		: description(description), parse(create_parse(out, was_set)), is_flag(FlagT<T>) {
 		split_named_key(key, letter, word);
 	}
 
@@ -73,8 +79,8 @@ struct Named {
 
 struct Positional {
 	template <ValueT T>
-	explicit Positional(T& out, std::string_view const name, std::string_view const description, Type const type)
-		: name(name), description(description), type(type), parse(create_parse(out)) {}
+	explicit Positional(T& out, std::string_view const name, std::string_view const description, Type const type, bool* was_set)
+		: name(name), description(description), type(type), parse(create_parse(out, was_set)) {}
 
 	std::string_view name;
 	std::string_view description;
@@ -84,8 +90,8 @@ struct Positional {
 
 struct List {
 	template <ValueT T>
-	explicit List(std::vector<T>& out, std::string_view const name, std::string_view const description)
-		: name(name), description(description), parse(create_parse(out)) {}
+	explicit List(std::vector<T>& out, std::string_view const name, std::string_view const description, bool* was_set)
+		: name(name), description(description), parse(create_parse(out, was_set)) {}
 
 	std::string_view name;
 	std::string_view description;
@@ -96,27 +102,32 @@ struct List {
 using Parameter = std::variant<parameter::Named, parameter::Positional, parameter::List>;
 
 template <parameter::FlagT T>
-[[nodiscard]] auto named_flag(T& out, std::string_view const key, std::string_view const description = {}) {
-	return Parameter{parameter::Named{out, key, description}};
+// NOLINTNEXTLINE(readability-non-const-parameter)
+[[nodiscard]] auto named_flag(T& out, std::string_view const key, std::string_view const description = {}, bool* was_set = {}) {
+	return Parameter{parameter::Named{out, key, description, was_set}};
 }
 
 template <parameter::ValueT T>
-[[nodiscard]] auto named_option(T& out, std::string_view const key, std::string_view const description = {}) {
-	return Parameter{parameter::Named{out, key, description}};
+// NOLINTNEXTLINE(readability-non-const-parameter)
+[[nodiscard]] auto named_option(T& out, std::string_view const key, std::string_view const description = {}, bool* was_set = {}) {
+	return Parameter{parameter::Named{out, key, description, was_set}};
 }
 
 template <parameter::ValueT T>
-[[nodiscard]] auto positional_required(T& out, std::string_view const name, std::string_view const description = {}) {
-	return Parameter{parameter::Positional{out, name, description, parameter::Type::Required}};
+// NOLINTNEXTLINE(readability-non-const-parameter)
+[[nodiscard]] auto positional_required(T& out, std::string_view const name, std::string_view const description = {}, bool* was_set = {}) {
+	return Parameter{parameter::Positional{out, name, description, parameter::Type::Required, was_set}};
 }
 
 template <parameter::ValueT T>
-[[nodiscard]] auto positional_optional(T& out, std::string_view const name, std::string_view const description = {}) {
-	return Parameter{parameter::Positional{out, name, description, parameter::Type::Optional}};
+// NOLINTNEXTLINE(readability-non-const-parameter)
+[[nodiscard]] auto positional_optional(T& out, std::string_view const name, std::string_view const description = {}, bool* was_set = {}) {
+	return Parameter{parameter::Positional{out, name, description, parameter::Type::Optional, was_set}};
 }
 
 template <parameter::ValueT T>
-[[nodiscard]] auto positional_list(std::vector<T>& out, std::string_view const name, std::string_view const description = {}) {
-	return Parameter{parameter::List{out, name, description}};
+// NOLINTNEXTLINE(readability-non-const-parameter)
+[[nodiscard]] auto positional_list(std::vector<T>& out, std::string_view const name, std::string_view const description = {}, bool* was_set = {}) {
+	return Parameter{parameter::List{out, name, description, was_set}};
 }
 } // namespace clap
