@@ -1,8 +1,10 @@
 #pragma once
 #include "clap/command.hpp"
 #include "clap/parameter.hpp"
+#include "clap/printer.hpp"
 #include "detail/scanner.hpp"
 #include <cstddef>
+#include <format>
 #include <span>
 #include <string_view>
 
@@ -18,26 +20,33 @@ struct ParseInput {
 	std::span<Parameter const> parameters{};
 	std::span<Command const> commands{};
 	ParseProgram program{};
+	IPrinter* printer{};
 };
 
 enum class ParseOutcome : std::int8_t { Continue, EarlyExit };
 
-enum class ParameterError : std::int8_t {
+namespace error {
+enum class Internal : std::int8_t {
+	UnrecognizedToken,
+};
+
+enum class Parameter : std::int8_t {
 	ExtraneousPositional,
 };
 
-enum class ParseError : std::int8_t {
+enum class Parse : std::int8_t {
 	ExtraneousArgument,
 	InvalidArgument,
 	OptionRequiresArgument,
 	MissingRequiredArgument,
 	UnexpectedToken,
 };
-[[nodiscard]] auto to_string_view(ParseError error) -> std::string_view;
+[[nodiscard]] auto to_string_view(Parse error) -> std::string_view;
+} // namespace error
 
 struct ParseOutput {
 	ParseOutcome outcome{};
-	ParseError error{};
+	error::Parse error{};
 };
 
 class Parser {
@@ -63,6 +72,13 @@ class Parser {
 
 	auto select_command() -> bool;
 	void check_required_parsed();
+
+	template <typename... Args>
+	void println(std::format_string<Args...> fmt, Args&&... args) const;
+	template <typename... Args>
+	void printerr(std::format_string<Args...> fmt, Args&&... args) const;
+
+	IPrinter* m_printer;
 
 	std::span<std::string_view const> m_args;
 	ParseProgram m_program{};

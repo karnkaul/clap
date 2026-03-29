@@ -1,10 +1,12 @@
 #include "clap/parameter.hpp"
+#include "clap/printer.hpp"
 #include "detail/parser.hpp"
 #include "detail/scanner.hpp"
 #include "detail/visitor.hpp"
 #include <algorithm>
 #include <cassert>
 #include <limits>
+#include <print>
 #include <ranges>
 #include <string_view>
 
@@ -25,6 +27,16 @@ namespace {
 	};
 	return std::ranges::all_of(std::views::zip(a, b), pred);
 }
+
+struct Printer : IPrinter {
+	[[nodiscard]] static auto self() -> Printer& {
+		static auto ret = Printer{};
+		return ret;
+	}
+
+	void println(std::string_view const message) final { std::println("{}", message); }
+	void printerr(std::string_view const message) final { std::println(stderr, "{}", message); }
+};
 } // namespace
 
 namespace detail {
@@ -77,7 +89,9 @@ auto Scanner::to_token(Token::Type const type, std::size_t const length) -> Toke
 	return ret;
 }
 
-Parser::Parser(ParseInput const& input) : m_args(input.args), m_program(input.program), m_commands(input.commands), m_scanner(input.args) {
+Parser::Parser(ParseInput const& input)
+	: m_printer(input.printer ? input.printer : &IPrinter::default_printer()), m_args(input.args), m_program(input.program), m_commands(input.commands),
+	  m_scanner(input.args) {
 	triage_parameters(input.parameters);
 }
 
@@ -99,16 +113,16 @@ void Parser::triage_parameters(std::span<Parameter const> input) {
 		[&](parameter::Named const& n) { m_named_parameters.push_back(&n); },
 		[&](parameter::Positional const& p) {
 			if (positionals_ended) {
-				// TODO: print error
-				throw ParameterError{ParameterError::ExtraneousPositional};
+				printerr("extraneous positional: '{}'", p.name);
+				throw error::Parameter{error::Parameter::ExtraneousPositional};
 			}
 			if (p.type == parameter::Type::Optional) { positionals_ended = true; }
 			m_positional_parameters.push_back(&p);
 		},
 		[&](parameter::List const& l) {
 			if (positionals_ended) {
-				// TODO: print error
-				throw ParameterError{ParameterError::ExtraneousPositional};
+				printerr("extraneous positional: '{}'", l.name);
+				throw error::Parameter{error::Parameter::ExtraneousPositional};
 			}
 			m_list_parameter = &l;
 			positionals_ended = true;
@@ -135,14 +149,10 @@ void Parser::parse_current() {
 	case Token::Type::MinusMinusString: parse_long_option(); break;
 	case Token::Type::MinusString: parse_short_options(); break;
 
-	case Token::Type::Equals:
-		// TODO: print error
-		throw ParseError{ParseError::UnexpectedToken};
-
-	default:
 	case Token::Type::Eof:
-		// TODO: print error
-		throw ParseError{ParseError::UnexpectedToken};
+	case Token::Type::Equals: printerr("unexpected token: '{}'", m_current.lexeme); throw error::Parse{error::Parse::UnexpectedToken};
+
+	default: printerr("unrecognized token: '{}'", m_current.lexeme); throw error::Internal{error::Internal::UnrecognizedToken};
 	}
 }
 
@@ -152,11 +162,11 @@ void Parser::parse_argument() {
 	if (m_positional_index >= m_positional_parameters.size()) {
 		if (!m_list_parameter) {
 			// TODO: print error
-			throw ParseError{ParseError::ExtraneousArgument};
+			throw error::Parse{error::Parse::ExtraneousArgument};
 		}
 		if (!m_list_parameter->parse(m_current.lexeme)) {
 			// TODO: print error
-			throw ParseError{ParseError::InvalidArgument};
+			throw error::Parse{error::Parse::InvalidArgument};
 		}
 		advance();
 		return;
@@ -165,7 +175,7 @@ void Parser::parse_argument() {
 	auto const* positional = m_positional_parameters[m_positional_index++];
 	if (!positional->parse(m_current.lexeme)) {
 		// TODO: print error
-		throw ParseError{ParseError::InvalidArgument};
+		throw error::Parse{error::Parse::InvalidArgument};
 	}
 	advance();
 }
@@ -195,7 +205,7 @@ void Parser::parse_long_option() {
 	auto const* named = find_named(word);
 	if (!named) {
 		// TODO: print error
-		throw ParseError{ParseError::InvalidArgument};
+		throw error::Parse{error::Parse::InvalidArgument};
 	}
 
 	advance();
@@ -209,7 +219,7 @@ void Parser::parse_short_options() {
 		auto const* named = find_named(letters.front());
 		if (!named || !named->is_flag) {
 			// TODO: print error
-			throw ParseError{ParseError::OptionRequiresArgument};
+			throw error::Parse{error::Parse::OptionRequiresArgument};
 		}
 		named->parse("true");
 	}
@@ -217,7 +227,7 @@ void Parser::parse_short_options() {
 	auto const* named = find_named(letters.front());
 	if (!named) {
 		// TODO: print error
-		throw ParseError{ParseError::InvalidArgument};
+		throw error::Parse{error::Parse::InvalidArgument};
 	}
 
 	advance();
@@ -238,7 +248,7 @@ void Parser::parse_last_option(parameter::Named const& named) {
 
 	if (m_current.type != Token::Type::String) {
 		// TODO: print error
-		throw ParseError{ParseError::MissingRequiredArgument};
+		throw error::Parse{error::Parse::MissingRequiredArgument};
 	}
 
 	parse_option_value(named);
@@ -247,12 +257,12 @@ void Parser::parse_last_option(parameter::Named const& named) {
 void Parser::parse_option_value(parameter::Named const& named) {
 	if (m_current.type != Token::Type::String) {
 		// TODO: print error
-		throw ParseError{ParseError::InvalidArgument};
+		throw error::Parse{error::Parse::InvalidArgument};
 	}
 
 	if (!named.parse(m_current.lexeme)) {
 		// TODO: print error
-		throw ParseError{ParseError::InvalidArgument};
+		throw error::Parse{error::Parse::InvalidArgument};
 	}
 
 	advance();
@@ -291,17 +301,27 @@ void Parser::check_required_parsed() {
 	auto const* remaining = m_positional_parameters[m_positional_index];
 	if (remaining->type == parameter::Type::Optional) { return; }
 	// TODO: print error
-	throw ParseError{ParseError::MissingRequiredArgument};
+	throw error::Parse{error::Parse::MissingRequiredArgument};
+}
+
+template <typename... Args>
+void Parser::println(std::format_string<Args...> fmt, Args&&... args) const {
+	m_printer->println(std::format(fmt, std::forward<Args>(args)...));
+}
+
+template <typename... Args>
+void Parser::printerr(std::format_string<Args...> fmt, Args&&... args) const {
+	m_printer->printerr(std::format(fmt, std::forward<Args>(args)...));
 }
 } // namespace detail
 
-auto detail::to_string_view(ParseError const error) -> std::string_view {
+auto detail::error::to_string_view(Parse const error) -> std::string_view {
 	switch (error) {
-	case ParseError::ExtraneousArgument: return "ExtraneousArgument";
-	case ParseError::InvalidArgument: return "InvalidArgument";
-	case ParseError::OptionRequiresArgument: return "OptionRequiresArgument";
-	case ParseError::MissingRequiredArgument: return "MissingRequiredArgument";
-	case ParseError::UnexpectedToken: return "UnexpectedToken";
+	case Parse::ExtraneousArgument: return "ExtraneousArgument";
+	case Parse::InvalidArgument: return "InvalidArgument";
+	case Parse::OptionRequiresArgument: return "OptionRequiresArgument";
+	case Parse::MissingRequiredArgument: return "MissingRequiredArgument";
+	case Parse::UnexpectedToken: return "UnexpectedToken";
 	}
 }
 
@@ -312,6 +332,8 @@ auto Parse::operator()(std::string_view const input) const -> bool {
 	return true;
 }
 } // namespace parameter
+
+auto IPrinter::default_printer() -> IPrinter& { return Printer::self(); }
 
 void parameter::split_named_key(std::string_view const key, char& out_letter, std::string_view& out_word) {
 	if (key.empty()) { return; }
