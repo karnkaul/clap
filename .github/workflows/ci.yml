@@ -1,0 +1,131 @@
+name: ci-pr
+on: [pull_request, workflow_dispatch]
+jobs:
+  format-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: format code
+        run: scripts/format_code.sh
+      - name: check diff
+        run: .github/format_check_diff.sh
+  x64-linux-gcc:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: init
+        run: |
+            uname -m
+            sudo update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-14 10
+      - name: configure
+        run: cmake -S . --preset=ninja-gcc -B build
+      - name: build debug
+        run: cmake --build build --config=Debug -- -v
+      - name: build release
+        run: cmake --build build --config=Release -- -v
+      - name: test debug
+        run: cd build && ctest -V -C Debug
+      - name: test release
+        run: cd build && ctest -V -C Release
+  x64-linux-clang:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: init
+        run: |
+            uname -m
+            sudo apt update -yqq && sudo apt install -yqq clang-20
+            sudo update-alternatives --remove-all clang++
+            sudo update-alternatives --install /usr/bin/clang++ clang++ /usr/bin/clang++-20 10
+      - name: configure
+        run: cmake -S . --preset=ninja-clang -B build
+      - name: build debug
+        run: cmake --build build --config=Debug -- -v
+      - name: build release
+        run: cmake --build build --config=Release -- -v
+      - name: test debug
+        run: cd build && ctest -V -C Debug
+      - name: test release
+        run: cd build && ctest -V -C Release
+  arm64-linux-gcc:
+    runs-on: ubuntu-24.04-arm
+    steps:
+      - uses: actions/checkout@v6
+      - name: init
+        run: |
+            uname -m
+            sudo update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-14 10
+      - name: configure
+        run: cmake -S . --preset=ninja-gcc -B build
+      - name: build debug
+        run: cmake --build build --config=Debug -- -v
+      - name: build release
+        run: cmake --build build --config=Release -- -v
+      - name: test debug
+        run: cd build && ctest -V -C Debug
+      - name: test release
+        run: cd build && ctest -V -C Release
+  arm64-linux-clang:
+    runs-on: ubuntu-24.04-arm
+    steps:
+      - uses: actions/checkout@v6
+      - name: init
+        run: |
+            uname -m
+            sudo apt update -yqq && sudo apt install -yqq clang-20
+            sudo update-alternatives --remove-all clang++
+            sudo update-alternatives --install /usr/bin/clang++ clang++ /usr/bin/clang++-20 10
+      - name: configure
+        run: cmake -S . --preset=ninja-clang -B build
+      - name: build debug
+        run: cmake --build build --config=Debug -- -v
+      - name: build release
+        run: cmake --build build --config=Release -- -v
+      - name: test debug
+        run: cd build && ctest -V -C Debug
+      - name: test release
+        run: cd build && ctest -V -C Release
+  x64-windows-vs22:
+    runs-on: windows-2025
+    steps:
+      - uses: actions/checkout@v6
+      - name: configure
+        run: cmake -S . --preset=vs22 -B build
+      - name: build debug
+        run: cmake --build build --config=Debug --parallel
+      - name: build release
+        run: cmake --build build --config=Release --parallel
+      - name: test debug
+        run: cd build && ctest -V -C Debug
+      - name: test release
+        run: cd build && ctest -V -C Release
+  x64-windows-clang:
+    runs-on: windows-2025
+    steps:
+      - uses: actions/checkout@v6
+      - name: configure
+        run: cmake -S . --preset=ninja-clang -B build
+      - name: build debug
+        run: cmake --build build --config=Debug -- -v
+      - name: build release
+        run: cmake --build build --config=Release -- -v
+      - name: test debug
+        run: cd build && ctest -V -C Debug
+      - name: test release
+        run: cd build && ctest -V -C Release
+  x64-mingw-gcc:
+    runs-on: windows-2025
+    steps:
+      - uses: actions/checkout@v6
+      - name: configure
+        run: cmake -S . --preset=ninja-gcc -B build
+      - name: build debug
+        run: cmake --build build --config=Debug -- -v
+      - name: build release
+        run: cmake --build build --config=Release -- -v
+      - name: test debug
+        run: cd build && ctest -V -C Debug
+      - name: test release
+        run: cd build && ctest -V -C Release
+
+
