@@ -97,7 +97,7 @@ void Parser::PrinterWrapper::printerr_prefixed(std::string_view const message) c
 	}
 }
 
-Parser::Parser(ParseInput const& input) : m_args(input.args), m_program(input.program), m_commands(input.commands), m_scanner(input.args) {
+Parser::Parser(ParseInput const& input, std::span<std::string_view const> args) : m_program(input.program), m_commands(input.commands), m_scanner(args) {
 	m_printer = PrinterWrapper{
 		.printer = input.printer ? input.printer : &IPrinter::default_printer(),
 		.program_name = m_program.name,
@@ -105,11 +105,13 @@ Parser::Parser(ParseInput const& input) : m_args(input.args), m_program(input.pr
 	triage_parameters(input.parameters);
 }
 
-auto Parser::parse() -> ParseOutcome {
+auto Parser::parse() -> Result {
 	advance();
 	while (m_current.type != Token::Type::Eof && m_outcome == ParseOutcome::Continue) { parse_current(); }
 	check_required_parsed();
-	return m_outcome;
+	auto ret = Result{.outcome = m_outcome};
+	if (m_command) { ret.command_identifier = m_command->identifier; }
+	return ret;
 }
 
 void Parser::triage_parameters(std::span<Parameter const> input) {
@@ -204,12 +206,6 @@ void Parser::parse_long_option() {
 
 	if (word == "help") {
 		// TODO: print global/command help
-		m_outcome = ParseOutcome::EarlyExit;
-		return;
-	}
-
-	if (word == "usage") {
-		// TODO: print global/command usage
 		m_outcome = ParseOutcome::EarlyExit;
 		return;
 	}

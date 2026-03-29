@@ -10,12 +10,11 @@ using namespace std::string_view_literals;
 
 auto get_outcome(std::span<Parameter const> parameters, std::vector<std::string_view> const& args) {
 	auto parse_input = detail::ParseInput{
-		.args = args,
 		.parameters = parameters,
 		.program = detail::ParseProgram{.name = "clap-test"},
 	};
-	auto parser = detail::Parser{parse_input};
-	return parser.parse();
+	auto parser = detail::Parser{parse_input, args};
+	return parser.parse().outcome;
 }
 
 TEST_CASE(parser_flags) {

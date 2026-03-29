@@ -15,7 +15,6 @@ struct ParseProgram {
 };
 
 struct ParseInput {
-	std::span<std::string_view const> args;
 	std::span<Parameter const> parameters{};
 	std::span<Command const> commands{};
 	ParseProgram program{};
@@ -45,9 +44,14 @@ enum class Parse : std::int8_t {
 
 class Parser {
   public:
-	explicit Parser(ParseInput const& input);
+	struct Result {
+		ParseOutcome outcome{};
+		std::string_view command_identifier{};
+	};
 
-	auto parse() noexcept(false) -> ParseOutcome;
+	explicit Parser(ParseInput const& input, std::span<std::string_view const> args);
+
+	auto parse() noexcept(false) -> Result;
 
   private:
 	struct PrinterWrapper {
@@ -75,12 +79,9 @@ class Parser {
 	void check_required_parsed();
 
 	PrinterWrapper m_printer{};
-
-	std::span<std::string_view const> m_args;
 	ParseProgram m_program{};
 
 	std::span<Command const> m_commands{};
-
 	std::vector<parameter::Named const*> m_named_parameters{};
 	std::vector<parameter::Positional const*> m_positional_parameters{};
 	parameter::List const* m_list_parameter{};
