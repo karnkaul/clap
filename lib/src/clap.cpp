@@ -161,11 +161,11 @@ void Parser::parse_argument() {
 
 	if (m_positional_index >= m_positional_parameters.size()) {
 		if (!m_list_parameter) {
-			// TODO: print error
+			printerr("unknown argument: '{}'", m_current.lexeme);
 			throw error::Parse{error::Parse::UnknownArgument};
 		}
 		if (!m_list_parameter->parse(m_current.lexeme)) {
-			// TODO: print error
+			printerr("invalid {}: '{}'", m_list_parameter->name, m_current.lexeme);
 			throw error::Parse{error::Parse::InvalidArgument};
 		}
 		advance();
@@ -174,7 +174,7 @@ void Parser::parse_argument() {
 
 	auto const* positional = m_positional_parameters[m_positional_index++];
 	if (!positional->parse(m_current.lexeme)) {
-		// TODO: print error
+		printerr("invalid {}: '{}'", positional->name, m_current.lexeme);
 		throw error::Parse{error::Parse::InvalidArgument};
 	}
 	advance();
@@ -185,7 +185,7 @@ void Parser::parse_long_option() {
 	auto const word = m_current.lexeme.substr(2);
 
 	if (!m_command && !m_program.version.empty() && word == "version") {
-		// TODO: print version
+		println("{}", m_program.version);
 		m_outcome = ParseOutcome::EarlyExit;
 		return;
 	}

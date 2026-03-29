@@ -98,6 +98,15 @@ TEST_CASE(parser_options) {
 		EXPECT(err == detail::error::Parse::InvalidArgument);
 	}
 	EXPECT(thrown);
+
+	thrown = false;
+	try {
+		outcome = get_outcome(parameters, {"--version"});
+	} catch (detail::error::Parse const err) {
+		thrown = true;
+		EXPECT(err == detail::error::Parse::UnrecognizedOption);
+	}
+	EXPECT(thrown);
 }
 
 TEST_CASE(parser_required) {
@@ -132,6 +141,17 @@ TEST_CASE(parser_required) {
 	} catch (detail::error::Parse const error) {
 		thrown = true;
 		EXPECT(error == detail::error::Parse::UnknownArgument);
+	}
+	EXPECT(thrown);
+
+	a = {};
+	b.clear();
+	thrown = false;
+	try {
+		outcome = get_outcome(parameters, {"foo", "y"});
+	} catch (detail::error::Parse const error) {
+		thrown = true;
+		EXPECT(error == detail::error::Parse::InvalidArgument);
 	}
 	EXPECT(thrown);
 }
