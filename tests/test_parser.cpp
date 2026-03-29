@@ -12,6 +12,7 @@ auto get_outcome(std::span<Parameter const> parameters, std::vector<std::string_
 	auto parse_input = detail::ParseInput{
 		.args = args,
 		.parameters = parameters,
+		.program = detail::ParseProgram{.name = "clap-test"},
 	};
 	auto parser = detail::Parser{parse_input};
 	return parser.parse();
@@ -54,6 +55,15 @@ TEST_CASE(parser_flags) {
 	auto thrown = false;
 	try {
 		outcome = get_outcome(parameters, {"--flagb=abc", "-a"});
+	} catch (detail::error::Parse const err) {
+		thrown = true;
+		EXPECT(err == detail::error::Parse::InvalidArgument);
+	}
+	EXPECT(thrown);
+
+	thrown = false;
+	try {
+		outcome = get_outcome(parameters, {"-a=foo"});
 	} catch (detail::error::Parse const err) {
 		thrown = true;
 		EXPECT(err == detail::error::Parse::InvalidArgument);
@@ -105,6 +115,24 @@ TEST_CASE(parser_options) {
 	} catch (detail::error::Parse const err) {
 		thrown = true;
 		EXPECT(err == detail::error::Parse::UnrecognizedOption);
+	}
+	EXPECT(thrown);
+
+	thrown = false;
+	try {
+		outcome = get_outcome(parameters, {"--optb"});
+	} catch (detail::error::Parse const err) {
+		thrown = true;
+		EXPECT(err == detail::error::Parse::OptionRequiresArgument);
+	}
+	EXPECT(thrown);
+
+	thrown = false;
+	try {
+		outcome = get_outcome(parameters, {"-b"});
+	} catch (detail::error::Parse const err) {
+		thrown = true;
+		EXPECT(err == detail::error::Parse::OptionRequiresArgument);
 	}
 	EXPECT(thrown);
 }

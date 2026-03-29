@@ -89,9 +89,19 @@ auto Scanner::to_token(Token::Type const type, std::size_t const length) -> Toke
 	return ret;
 }
 
-Parser::Parser(ParseInput const& input)
-	: m_printer(input.printer ? input.printer : &IPrinter::default_printer()), m_args(input.args), m_program(input.program), m_commands(input.commands),
-	  m_scanner(input.args) {
+void Parser::PrinterWrapper::printerr_prefixed(std::string_view const message) const {
+	if (program_name.empty()) {
+		printer->printerr(message);
+	} else {
+		printer->printerr(std::format("{}: {}", program_name, message));
+	}
+}
+
+Parser::Parser(ParseInput const& input) : m_args(input.args), m_program(input.program), m_commands(input.commands), m_scanner(input.args) {
+	m_printer = PrinterWrapper{
+		.printer = input.printer ? input.printer : &IPrinter::default_printer(),
+		.program_name = m_program.name,
+	};
 	triage_parameters(input.parameters);
 }
 
@@ -113,7 +123,7 @@ void Parser::triage_parameters(std::span<Parameter const> input) {
 		[&](parameter::Named const& n) { m_named_parameters.push_back(&n); },
 		[&](parameter::Positional const& p) {
 			if (positionals_ended) {
-				printerr("extraneous positional: '{}'", p.name);
+				m_printer.printerr_prefixed(std::format("extraneous positional: '{}'", p.name));
 				throw error::Parameter{error::Parameter::ExtraneousPositional};
 			}
 			if (p.type == parameter::Type::Optional) { positionals_ended = true; }
@@ -121,7 +131,7 @@ void Parser::triage_parameters(std::span<Parameter const> input) {
 		},
 		[&](parameter::List const& l) {
 			if (positionals_ended) {
-				printerr("extraneous positional: '{}'", l.name);
+				m_printer.printerr_prefixed(std::format("extraneous positional: '{}'", l.name));
 				throw error::Parameter{error::Parameter::ExtraneousPositional};
 			}
 			m_list_parameter = &l;
@@ -150,9 +160,11 @@ void Parser::parse_current() {
 	case Token::Type::MinusString: parse_short_options(); break;
 
 	case Token::Type::Eof:
-	case Token::Type::Equals: printerr("unexpected token: '{}'", m_current.lexeme); throw error::Parse{error::Parse::UnexpectedToken};
+	case Token::Type::Equals:
+		m_printer.printerr_prefixed(std::format("unexpected token: '{}'", m_current.lexeme));
+		throw error::Parse{error::Parse::UnexpectedToken};
 
-	default: printerr("unrecognized token: '{}'", m_current.lexeme); throw error::Internal{error::Internal::UnrecognizedToken};
+	default: m_printer.printerr_prefixed(std::format("unrecognized token: '{}'", m_current.lexeme)); throw error::Internal{error::Internal::UnrecognizedToken};
 	}
 }
 
@@ -161,11 +173,11 @@ void Parser::parse_argument() {
 
 	if (m_positional_index >= m_positional_parameters.size()) {
 		if (!m_list_parameter) {
-			printerr("unknown argument: '{}'", m_current.lexeme);
+			m_printer.printerr_prefixed(std::format("unknown argument: '{}'", m_current.lexeme));
 			throw error::Parse{error::Parse::UnknownArgument};
 		}
 		if (!m_list_parameter->parse(m_current.lexeme)) {
-			printerr("invalid {}: '{}'", m_list_parameter->name, m_current.lexeme);
+			m_printer.printerr_prefixed(std::format("invalid {}: '{}'", m_list_parameter->name, m_current.lexeme));
 			throw error::Parse{error::Parse::InvalidArgument};
 		}
 		advance();
@@ -174,7 +186,7 @@ void Parser::parse_argument() {
 
 	auto const* positional = m_positional_parameters[m_positional_index++];
 	if (!positional->parse(m_current.lexeme)) {
-		printerr("invalid {}: '{}'", positional->name, m_current.lexeme);
+		m_printer.printerr_prefixed(std::format("invalid {}: '{}'", positional->name, m_current.lexeme));
 		throw error::Parse{error::Parse::InvalidArgument};
 	}
 	advance();
@@ -185,7 +197,7 @@ void Parser::parse_long_option() {
 	auto const word = m_current.lexeme.substr(2);
 
 	if (!m_command && !m_program.version.empty() && word == "version") {
-		println("{}", m_program.version);
+		m_printer.printer->println(m_program.version);
 		m_outcome = ParseOutcome::EarlyExit;
 		return;
 	}
@@ -204,7 +216,7 @@ void Parser::parse_long_option() {
 
 	auto const& named = get_named(word);
 	advance();
-	parse_last_option(named);
+	parse_last_option(named, false);
 }
 
 void Parser::parse_short_options() {
@@ -213,7 +225,7 @@ void Parser::parse_short_options() {
 	for (; letters.size() > 1; letters.remove_prefix(1)) {
 		auto const& named = get_named(letters.front());
 		if (!named.is_flag) {
-			// TODO: print error
+			m_printer.printerr_prefixed(std::format("option requires an argument -- '{}'", named.letter));
 			throw error::Parse{error::Parse::OptionRequiresArgument};
 		}
 		named.parse("true");
@@ -221,13 +233,13 @@ void Parser::parse_short_options() {
 
 	auto const& named = get_named(letters.front());
 	advance();
-	parse_last_option(named);
+	parse_last_option(named, true);
 }
 
-void Parser::parse_last_option(parameter::Named const& named) {
+void Parser::parse_last_option(parameter::Named const& named, bool const is_letter) {
 	if (m_current.type == Token::Type::Equals) {
 		advance();
-		parse_option_value(named);
+		parse_option_value(named, is_letter);
 		return;
 	}
 
@@ -236,22 +248,25 @@ void Parser::parse_last_option(parameter::Named const& named) {
 		return;
 	}
 
-	if (m_current.type != Token::Type::String) {
-		// TODO: print error
-		throw error::Parse{error::Parse::OptionRequiresArgument};
-	}
-
-	parse_option_value(named);
+	parse_option_value(named, is_letter);
 }
 
-void Parser::parse_option_value(parameter::Named const& named) {
+void Parser::parse_option_value(parameter::Named const& named, bool const is_letter) {
 	if (m_current.type != Token::Type::String) {
-		// TODO: print error
+		if (is_letter) {
+			m_printer.printerr_prefixed(std::format("option requires an argument -- '{}'", named.letter));
+		} else {
+			m_printer.printerr_prefixed(std::format("option '--{}' requires an argument", named.word));
+		}
 		throw error::Parse{error::Parse::OptionRequiresArgument};
 	}
 
 	if (!named.parse(m_current.lexeme)) {
-		// TODO: print error
+		if (is_letter) {
+			m_printer.printerr_prefixed(std::format("invalid '-{}': '{}'", named.letter, m_current.lexeme));
+		} else {
+			m_printer.printerr_prefixed(std::format("invalid '--{}': {}", named.word, m_current.lexeme));
+		}
 		throw error::Parse{error::Parse::InvalidArgument};
 	}
 
@@ -267,12 +282,14 @@ auto Parser::find_command(std::string_view const identifier) const -> Command co
 auto Parser::get_named(char const letter) const -> parameter::Named const& {
 	auto const it = std::ranges::find_if(m_named_parameters, [letter](parameter::Named const* p) { return p->letter == letter; });
 	if (it != m_named_parameters.end()) { return **it; }
+	m_printer.printerr_prefixed(std::format("unrecognized option: '{}'", m_current.lexeme));
 	throw error::Parse{error::Parse::UnrecognizedOption};
 }
 
 auto Parser::get_named(std::string_view const word) const -> parameter::Named const& {
 	auto const it = std::ranges::find_if(m_named_parameters, [word](parameter::Named const* p) { return p->word == word; });
 	if (it != m_named_parameters.end()) { return **it; }
+	m_printer.printerr_prefixed(std::format("unrecognized option: '{}'", m_current.lexeme));
 	throw error::Parse{error::Parse::UnrecognizedOption};
 }
 
@@ -293,28 +310,7 @@ void Parser::check_required_parsed() {
 	// TODO: print error
 	throw error::Parse{error::Parse::MissingRequiredArgument};
 }
-
-template <typename... Args>
-void Parser::println(std::format_string<Args...> fmt, Args&&... args) const {
-	m_printer->println(std::format(fmt, std::forward<Args>(args)...));
-}
-
-template <typename... Args>
-void Parser::printerr(std::format_string<Args...> fmt, Args&&... args) const {
-	m_printer->printerr(std::format(fmt, std::forward<Args>(args)...));
-}
 } // namespace detail
-
-auto detail::error::to_string_view(Parse const error) -> std::string_view {
-	switch (error) {
-	case Parse::UnknownArgument: return "UnknownArgument";
-	case Parse::InvalidArgument: return "InvalidArgument";
-	case Parse::UnrecognizedOption: return "UnrecognizedOption";
-	case Parse::OptionRequiresArgument: return "OptionRequiresArgument";
-	case Parse::MissingRequiredArgument: return "MissingRequiredArgument";
-	case Parse::UnexpectedToken: return "UnexpectedToken";
-	}
-}
 
 namespace parameter {
 auto Parse::operator()(std::string_view const input) const -> bool {

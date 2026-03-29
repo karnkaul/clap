@@ -4,7 +4,6 @@
 #include "clap/printer.hpp"
 #include "detail/scanner.hpp"
 #include <cstddef>
-#include <format>
 #include <span>
 #include <string_view>
 
@@ -42,13 +41,7 @@ enum class Parse : std::int8_t {
 	MissingRequiredArgument,
 	UnexpectedToken,
 };
-[[nodiscard]] auto to_string_view(Parse error) -> std::string_view;
 } // namespace error
-
-struct ParseOutput {
-	ParseOutcome outcome{};
-	error::Parse error{};
-};
 
 class Parser {
   public:
@@ -57,6 +50,13 @@ class Parser {
 	auto parse() noexcept(false) -> ParseOutcome;
 
   private:
+	struct PrinterWrapper {
+		void printerr_prefixed(std::string_view message) const;
+
+		IPrinter* printer{};
+		std::string_view program_name{};
+	};
+
 	void triage_parameters(std::span<Parameter const> input);
 	void advance();
 
@@ -64,8 +64,8 @@ class Parser {
 	void parse_argument();
 	void parse_long_option();
 	void parse_short_options();
-	void parse_last_option(parameter::Named const& named);
-	void parse_option_value(parameter::Named const& named);
+	void parse_last_option(parameter::Named const& named, bool is_letter);
+	void parse_option_value(parameter::Named const& named, bool is_letter);
 
 	[[nodiscard]] auto find_command(std::string_view identifier) const -> Command const*;
 	[[nodiscard]] auto get_named(char letter) const noexcept(false) -> parameter::Named const&;
@@ -74,12 +74,7 @@ class Parser {
 	auto select_command() -> bool;
 	void check_required_parsed();
 
-	template <typename... Args>
-	void println(std::format_string<Args...> fmt, Args&&... args) const;
-	template <typename... Args>
-	void printerr(std::format_string<Args...> fmt, Args&&... args) const;
-
-	IPrinter* m_printer;
+	PrinterWrapper m_printer{};
 
 	std::span<std::string_view const> m_args;
 	ParseProgram m_program{};
