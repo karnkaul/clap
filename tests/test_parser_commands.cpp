@@ -1,12 +1,14 @@
+#include "clap/parameter.hpp"
 #include "detail/parser_impl.hpp"
+#include "detail/types.hpp"
 #include "klib/unit_test/unit_test.hpp"
 
 namespace {
 using namespace clap;
 
-auto get_result(std::span<Parameter const> parameters, std::span<Command const> commands, std::vector<std::string_view> const& args) {
-	auto parse_input = detail::Input{
-		.parameters = parameters,
+auto get_result(std::span<parameter::Named const> parameters, std::span<Command const> commands, std::vector<std::string_view> const& args) {
+	auto parse_input = detail::CommandInput{
+		.options = parameters,
 		.commands = commands,
 		.program = Program{.name = "clap-test"},
 	};
@@ -17,13 +19,13 @@ auto get_result(std::span<Parameter const> parameters, std::span<Command const> 
 
 TEST_CASE(parser_commands) {
 	auto flag = bool{};
-	auto const parameters = std::array{
+	auto const parameters = std::vector<parameter::Named>{
 		named_flag(flag, "f,flag", "program flag"),
 	};
 
 	auto cmd_flag = bool{};
 	auto cmd_arg = std::string_view{};
-	auto cmd_parameters = std::vector{
+	auto cmd_parameters = std::vector<Parameter>{
 		named_flag(cmd_flag, "f,flag", "command flag"),
 		positional_required(cmd_arg, "arg", "command arg"),
 	};

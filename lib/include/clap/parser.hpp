@@ -18,8 +18,9 @@ struct Context;
 
 class Parser {
   public:
-	explicit Parser(ParameterList parameters, CommandList commands, Program const& program = {}, IPrinter* custom_printer = {});
 	explicit Parser(ParameterList parameters, Program const& program = {}, IPrinter* custom_printer = {});
+
+	explicit Parser(CommandList commands, OptionList options = {}, Program const& program = {}, IPrinter* custom_printer = {});
 
 	[[nodiscard]] auto parse_words(std::span<std::string_view const> words) const -> Result;
 	[[nodiscard]] auto parse_line(std::string_view line) const -> Result;
@@ -30,8 +31,9 @@ class Parser {
 		void operator()(detail::Context* ptr) const noexcept;
 	};
 
-	ParameterList m_parameters;
-	CommandList m_commands;
+	ParameterList m_parameters{};
+	OptionList m_options{};
+	CommandList m_commands{};
 
 	std::unique_ptr<detail::Context, Deleter> m_context{};
 };

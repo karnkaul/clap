@@ -1,7 +1,7 @@
 #include "clap/parameter.hpp"
 #include "detail/parser_impl.hpp"
+#include "detail/types.hpp"
 #include "klib/unit_test/unit_test.hpp"
-#include <array>
 #include <string_view>
 
 namespace {
@@ -9,7 +9,7 @@ using namespace clap;
 using namespace std::string_view_literals;
 
 auto get_outcome(std::span<Parameter const> parameters, std::vector<std::string_view> const& args) {
-	auto parse_input = detail::Input{
+	auto parse_input = detail::ParameterInput{
 		.parameters = parameters,
 		.program = Program{.name = "clap-test"},
 	};
@@ -21,7 +21,7 @@ auto get_outcome(std::span<Parameter const> parameters, std::vector<std::string_
 TEST_CASE(parser_flags) {
 	auto a = false;
 	auto b = false;
-	auto const parameters = std::array{
+	auto const parameters = std::vector<Parameter>{
 		named_flag(a, "a,flaga"),
 		named_flag(b, "b,flagb"),
 	};
@@ -74,7 +74,7 @@ TEST_CASE(parser_flags) {
 TEST_CASE(parser_options) {
 	auto a = std::string_view{};
 	auto b = int{};
-	auto const parameters = std::array{
+	auto const parameters = std::vector<Parameter>{
 		named_option(a, "a,opta"),
 		named_option(b, "b,optb"),
 	};
@@ -140,7 +140,7 @@ TEST_CASE(parser_options) {
 TEST_CASE(parser_required) {
 	auto a = int{};
 	auto b = std::string{};
-	auto const parameters = std::array{
+	auto const parameters = std::vector<Parameter>{
 		positional_required(a, "arga"),
 		positional_required(b, "argb"),
 	};
@@ -187,7 +187,7 @@ TEST_CASE(parser_required) {
 TEST_CASE(parser_optional) {
 	auto a = std::string_view{};
 	auto b = int{};
-	auto const parameters = std::array{
+	auto const parameters = std::vector<Parameter>{
 		positional_required(a, "arga"),
 		positional_optional(b, "argb"),
 	};
@@ -226,7 +226,7 @@ TEST_CASE(parser_optional) {
 TEST_CASE(parser_list) {
 	auto flag = bool{};
 	auto list = std::vector<std::string_view>{};
-	auto const parameters = std::array{
+	auto const parameters = std::vector<Parameter>{
 		named_flag(flag, "f,flag"),
 		positional_list(list, "list"),
 	};
@@ -255,7 +255,7 @@ TEST_CASE(parser_parameter_errors) {
 
 	auto thrown = false;
 	try {
-		auto const parameters = std::array{
+		auto const parameters = std::vector<Parameter>{
 			named_flag(flag, "f0,flag0"),
 			positional_list(list, "list0"),
 			positional_required(str, "str0"),
@@ -269,7 +269,7 @@ TEST_CASE(parser_parameter_errors) {
 
 	thrown = false;
 	try {
-		auto const parameters = std::array{
+		auto const parameters = std::vector<Parameter>{
 			positional_optional(str, "str1"),
 			positional_required(i, "int1"),
 		};
@@ -286,7 +286,7 @@ TEST_CASE(parser_unexpected_tokens) {
 
 	auto thrown = false;
 	try {
-		auto const parameters = std::array{
+		auto const parameters = std::vector<Parameter>{
 			named_flag(flag, "f,flag"),
 		};
 		get_outcome(parameters, {"-f=true=false"});

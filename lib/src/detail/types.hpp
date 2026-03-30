@@ -48,6 +48,7 @@ struct PrinterWrapper {
 
 struct Frame {
 	explicit Frame(PrinterWrapper const& printer, std::span<Parameter const> parameters) noexcept(false);
+	explicit Frame(std::span<parameter::Named const> options) noexcept(false);
 
 	Ptr<Command const> command{};
 	std::vector<Ptr<parameter::Named const>> named_parameters{};
@@ -55,15 +56,22 @@ struct Frame {
 	Ptr<parameter::List const> list_parameter{};
 };
 
-struct Input {
+struct ParameterInput {
 	std::span<Parameter const> parameters{};
+	Program program{};
+	Ptr<IPrinter> printer{};
+};
+
+struct CommandInput {
+	std::span<parameter::Named const> options{};
 	std::span<Command const> commands{};
 	Program program{};
 	Ptr<IPrinter> printer{};
 };
 
 struct Context {
-	explicit Context(Input const& input) noexcept(false);
+	explicit Context(ParameterInput const& input) noexcept(false);
+	explicit Context(CommandInput const& input) noexcept(false);
 
 	PrinterWrapper printer;
 

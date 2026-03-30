@@ -106,21 +106,21 @@ Frame::Frame(PrinterWrapper const& printer, std::span<Parameter const> parameter
 	positional_parameters.reserve(parameters.size());
 
 	auto positionals_ended = false;
-	auto const check_extraneous_positional = [&](auto const& positional) {
+	auto const check_extraneous = [&](auto const& t) {
 		if (!positionals_ended) { return; }
-		printer.prefixed_err("extraneous positional: '{}'", positional.name);
+		printer.prefixed_err("extraneous positional: '{}'", t.name);
 		throw Error{Error::ExtraneousPositional};
 	};
 
 	auto const visitor = Visitor{
 		[&](parameter::Named const& n) { named_parameters.push_back(&n); },
 		[&](parameter::Positional const& p) {
-			check_extraneous_positional(p);
+			check_extraneous(p);
 			if (p.type == parameter::Type::Optional) { positionals_ended = true; }
 			positional_parameters.push_back(&p);
 		},
 		[&](parameter::List const& l) {
-			check_extraneous_positional(l);
+			check_extraneous(l);
 			list_parameter = &l;
 			positionals_ended = true;
 		},
@@ -129,18 +129,21 @@ Frame::Frame(PrinterWrapper const& printer, std::span<Parameter const> parameter
 	for (auto const& parameter : parameters) { std::visit(visitor, parameter); }
 }
 
-Context::Context(Input const& input) noexcept(false)
-	: printer(input.printer, input.program.name), main(printer, input.parameters), version(input.program.version), description(input.program.description) {
+Frame::Frame(std::span<parameter::Named const> options) noexcept(false) {
+	named_parameters.reserve(options.size());
+	for (auto const& parameter : options) { named_parameters.push_back(&parameter); }
+}
+
+Context::Context(ParameterInput const& input) noexcept(false)
+	: printer(input.printer, input.program.name), main(printer, input.parameters), version(input.program.version), description(input.program.description) {}
+
+Context::Context(CommandInput const& input) noexcept(false)
+	: printer(input.printer, input.program.name), main(input.options), version(input.program.version), description(input.program.description) {
 	commands.reserve(input.commands.size());
 	for (auto const& command : input.commands) {
 		auto frame = Frame{printer, command.parameters};
 		frame.command = &command;
 		commands.push_back(std::move(frame));
-	}
-
-	if (!commands.empty() && !main.positional_parameters.empty()) {
-		printer.prefixed_err("extraneous positional (incompatible with commands): '{}'", main.positional_parameters.front()->name);
-		throw Error{Error::ExtraneousPositional};
 	}
 }
 
@@ -456,10 +459,18 @@ auto Parse::operator()(std::string_view const input) const -> bool {
 auto IPrinter::default_printer() -> IPrinter& { return Printer::self(); }
 
 namespace {
-[[nodiscard]] auto to_input(std::span<Parameter const> parameters, std::span<Command const> commands, Program const& program,
-							detail::Ptr<IPrinter> custom_printer) {
-	return detail::Input{
+[[nodiscard]] auto to_parameter_input(ParameterList const& parameters, Program const& program, detail::Ptr<IPrinter> custom_printer) {
+	return detail::ParameterInput{
 		.parameters = parameters,
+		.program = program,
+		.printer = custom_printer ? custom_printer : &IPrinter::default_printer(),
+	};
+}
+
+[[nodiscard]] auto to_command_input(OptionList const& options, std::span<Command const> commands, Program const& program,
+									detail::Ptr<IPrinter> custom_printer) {
+	return detail::CommandInput{
+		.options = options,
 		.commands = commands,
 		.program = program,
 		.printer = custom_printer ? custom_printer : &IPrinter::default_printer(),
@@ -483,11 +494,12 @@ namespace {
 
 void Parser::Deleter::operator()(detail::Context* ptr) const noexcept { std::default_delete<detail::Context>{}(ptr); }
 
-Parser::Parser(ParameterList parameters, CommandList commands, Program const& program, IPrinter* custom_printer)
-	: m_parameters(std::move(parameters)), m_commands(std::move(commands)),
-	  m_context(new detail::Context{to_input(m_parameters, m_commands, program, custom_printer)}) {}
+Parser::Parser(ParameterList parameters, Program const& program, IPrinter* custom_printer)
+	: m_parameters(std::move(parameters)), m_context(new detail::Context{to_parameter_input(m_parameters, program, custom_printer)}) {}
 
-Parser::Parser(ParameterList parameters, Program const& program, IPrinter* custom_printer) : Parser(std::move(parameters), {}, program, custom_printer) {}
+Parser::Parser(CommandList commands, OptionList options, Program const& program, IPrinter* custom_printer)
+	: m_options(std::move(options)), m_commands(std::move(commands)),
+	  m_context(new detail::Context{to_command_input(m_options, m_commands, program, custom_printer)}) {}
 
 auto Parser::parse_words(std::span<std::string_view const> words) const -> Result {
 	if (!m_context) { return Result::error(ExitCode::InvalidParser); }

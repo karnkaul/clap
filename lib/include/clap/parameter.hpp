@@ -101,34 +101,35 @@ struct List {
 
 using Parameter = std::variant<parameter::Named, parameter::Positional, parameter::List>;
 using ParameterList = std::vector<Parameter>;
+using OptionList = std::vector<parameter::Named>;
 
 template <parameter::FlagT T>
 // NOLINTNEXTLINE(readability-non-const-parameter)
 [[nodiscard]] auto named_flag(T& out, std::string_view const key, std::string_view const description = {}, bool* was_set = {}) {
-	return Parameter{parameter::Named{out, key, description, was_set}};
+	return parameter::Named{out, key, description, was_set};
 }
 
 template <parameter::ValueT T>
 // NOLINTNEXTLINE(readability-non-const-parameter)
 [[nodiscard]] auto named_option(T& out, std::string_view const key, std::string_view const description = {}, bool* was_set = {}) {
-	return Parameter{parameter::Named{out, key, description, was_set}};
+	return parameter::Named{out, key, description, was_set};
 }
 
 template <parameter::ValueT T>
 // NOLINTNEXTLINE(readability-non-const-parameter)
 [[nodiscard]] auto positional_required(T& out, std::string_view const name, std::string_view const description = {}, bool* was_set = {}) {
-	return Parameter{parameter::Positional{out, name, description, parameter::Type::Required, was_set}};
+	return parameter::Positional{out, name, description, parameter::Type::Required, was_set};
 }
 
 template <parameter::ValueT T>
 // NOLINTNEXTLINE(readability-non-const-parameter)
 [[nodiscard]] auto positional_optional(T& out, std::string_view const name, std::string_view const description = {}, bool* was_set = {}) {
-	return Parameter{parameter::Positional{out, name, description, parameter::Type::Optional, was_set}};
+	return parameter::Positional{out, name, description, parameter::Type::Optional, was_set};
 }
 
 template <parameter::ValueT T>
 // NOLINTNEXTLINE(readability-non-const-parameter)
 [[nodiscard]] auto positional_list(std::vector<T>& out, std::string_view const name, std::string_view const description = {}, bool* was_set = {}) {
-	return Parameter{parameter::List{out, name, description, was_set}};
+	return parameter::List{out, name, description, was_set};
 }
 } // namespace clap
