@@ -1,0 +1,6 @@
+#pragma once
+#include <string_view>
+
+namespace clap {
+constexpr auto build_version_v = std::string_view{"@PROJECT_VERSION@"};
+} // namespace clap

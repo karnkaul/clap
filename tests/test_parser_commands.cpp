@@ -1,0 +1,78 @@
+#include "clap/parameter.hpp"
+#include "detail/parser_impl.hpp"
+#include "detail/types.hpp"
+#include "klib/unit_test/unit_test.hpp"
+#include <array>
+
+namespace {
+using namespace clap;
+
+auto get_result(std::span<parameter::Named const> parameters, std::span<Command const> commands, std::vector<std::string_view> const& args) {
+	auto parse_input = detail::CommandInput{
+		.options = parameters,
+		.commands = commands,
+		.program = Program{.name = "clap-test"},
+	};
+	auto parse_context = detail::Context{parse_input};
+	auto parser = detail::ParserImpl{parse_context, args};
+	return parser.parse();
+}
+
+TEST_CASE(parser_commands) {
+	auto flag = bool{};
+	auto const parameters = std::vector<parameter::Named>{
+		named_flag(flag, "f,flag", "program flag"),
+	};
+
+	auto cmd_flag = bool{};
+	auto cmd_arg = std::string_view{};
+	auto cmd_parameters = std::vector<Parameter>{
+		named_flag(cmd_flag, "f,flag", "command flag"),
+		positional_required(cmd_arg, "arg", "command arg"),
+	};
+
+	auto const commands = std::array{
+		command("cmd", std::move(cmd_parameters), "command"),
+	};
+
+	auto result = get_result(parameters, commands, {"-f", "cmd", "foo"});
+	EXPECT(result.outcome == Outcome::Continue);
+	EXPECT(result.command_identifier == commands[0].identifier);
+	EXPECT(flag);
+	EXPECT(!cmd_flag);
+	EXPECT(cmd_arg == "foo");
+
+	result = get_result(parameters, commands, {"--help"});
+	EXPECT(result.outcome == Outcome::EarlyExit);
+
+	result = get_result(parameters, commands, {"cmd", "--help"});
+	EXPECT(result.outcome == Outcome::EarlyExit);
+}
+
+TEST_CASE(parser_commands_missing) {
+	auto flag = bool{};
+	auto const parameters = std::vector<parameter::Named>{
+		named_flag(flag, "f,flag", "program flag"),
+	};
+
+	auto cmd_flag = bool{};
+	auto cmd_arg = std::string_view{};
+	auto cmd_parameters = std::vector<Parameter>{
+		named_flag(cmd_flag, "f,flag", "command flag"),
+		positional_required(cmd_arg, "arg", "command arg"),
+	};
+
+	auto const commands = std::array{
+		command("cmd", std::move(cmd_parameters), "command"),
+	};
+
+	auto thrown = false;
+	try {
+		get_result(parameters, commands, {"-f"});
+	} catch (detail::Error const err) {
+		thrown = true;
+		EXPECT(err == detail::Error::MissingRequiredCommand);
+	}
+	EXPECT(thrown);
+}
+} // namespace

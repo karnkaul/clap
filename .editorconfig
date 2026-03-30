@@ -1,0 +1,11 @@
+[*]
+insert_final_newline = true
+charset = utf-8
+indent_style = space
+indent_size = 2
+# Optional: git will commit as lf, this will only affect local files
+end_of_line = lf
+
+[*.{hpp,cpp}]
+indent_style = tab
+indent_size = 4
