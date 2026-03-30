@@ -7,3 +7,4 @@ function(add_example name)
 endfunction(add_example)
 
 add_example("square")
+add_example("execute")
