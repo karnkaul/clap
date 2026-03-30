@@ -17,6 +17,7 @@
 #include <print>
 #include <ranges>
 #include <string_view>
+#include <utility>
 
 namespace clap {
 namespace fs = std::filesystem;

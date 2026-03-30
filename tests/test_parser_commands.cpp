@@ -2,6 +2,7 @@
 #include "detail/parser_impl.hpp"
 #include "detail/types.hpp"
 #include "klib/unit_test/unit_test.hpp"
+#include <array>
 
 namespace {
 using namespace clap;
