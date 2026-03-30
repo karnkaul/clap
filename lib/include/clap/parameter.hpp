@@ -100,6 +100,7 @@ struct List {
 } // namespace parameter
 
 using Parameter = std::variant<parameter::Named, parameter::Positional, parameter::List>;
+using ParameterList = std::vector<Parameter>;
 
 template <parameter::FlagT T>
 // NOLINTNEXTLINE(readability-non-const-parameter)

@@ -5,12 +5,13 @@ namespace {
 using namespace clap;
 
 auto get_result(std::span<Parameter const> parameters, std::span<Command const> commands, std::vector<std::string_view> const& args) {
-	auto parse_input = detail::ParseInput{
+	auto parse_input = detail::Input{
 		.parameters = parameters,
 		.commands = commands,
-		.program = detail::ParseProgram{.name = "clap-test"},
+		.program = Program{.name = "clap-test"},
 	};
-	auto parser = detail::Parser{parse_input, args};
+	auto parse_context = detail::Context{parse_input};
+	auto parser = detail::Parser{parse_context, args};
 	return parser.parse();
 }
 
@@ -32,7 +33,7 @@ TEST_CASE(parser_commands) {
 	};
 
 	auto result = get_result(parameters, commands, {"-f", "cmd", "foo"});
-	EXPECT(result.outcome == detail::ParseOutcome::Continue);
+	EXPECT(result.outcome == detail::Outcome::Continue);
 	EXPECT(result.command_identifier == commands[0].identifier);
 	EXPECT(flag);
 	EXPECT(!cmd_flag);

@@ -9,11 +9,12 @@ using namespace clap;
 using namespace std::string_view_literals;
 
 auto get_outcome(std::span<Parameter const> parameters, std::vector<std::string_view> const& args) {
-	auto parse_input = detail::ParseInput{
+	auto parse_input = detail::Input{
 		.parameters = parameters,
-		.program = detail::ParseProgram{.name = "clap-test"},
+		.program = Program{.name = "clap-test"},
 	};
-	auto parser = detail::Parser{parse_input, args};
+	auto parse_context = detail::Context{parse_input};
+	auto parser = detail::Parser{parse_context, args};
 	return parser.parse().outcome;
 }
 
@@ -26,46 +27,46 @@ TEST_CASE(parser_flags) {
 	};
 
 	auto outcome = get_outcome(parameters, {"-ab"});
-	EXPECT(outcome == detail::ParseOutcome::Continue);
+	EXPECT(outcome == detail::Outcome::Continue);
 	EXPECT(a);
 	EXPECT(b);
 
 	a = b = false;
 	outcome = get_outcome(parameters, {"--flaga", "-b=true"});
-	EXPECT(outcome == detail::ParseOutcome::Continue);
+	EXPECT(outcome == detail::Outcome::Continue);
 	EXPECT(a);
 	EXPECT(b);
 
 	a = b = false;
 	outcome = get_outcome(parameters, {"--flagb=1", "-a"});
-	EXPECT(outcome == detail::ParseOutcome::Continue);
+	EXPECT(outcome == detail::Outcome::Continue);
 	EXPECT(a);
 	EXPECT(b);
 
 	a = b = false;
 	outcome = get_outcome(parameters, {"--flaga", "--flagb"});
-	EXPECT(outcome == detail::ParseOutcome::Continue);
+	EXPECT(outcome == detail::Outcome::Continue);
 	EXPECT(a);
 	EXPECT(b);
 
 	outcome = get_outcome(parameters, {"-ab", "--help"});
-	EXPECT(outcome == detail::ParseOutcome::EarlyExit);
+	EXPECT(outcome == detail::Outcome::EarlyExit);
 
 	auto thrown = false;
 	try {
 		outcome = get_outcome(parameters, {"--flagb=abc", "-a"});
-	} catch (detail::error::Parse const err) {
+	} catch (detail::Error const err) {
 		thrown = true;
-		EXPECT(err == detail::error::Parse::InvalidArgument);
+		EXPECT(err == detail::Error::InvalidArgument);
 	}
 	EXPECT(thrown);
 
 	thrown = false;
 	try {
 		outcome = get_outcome(parameters, {"-a=foo"});
-	} catch (detail::error::Parse const err) {
+	} catch (detail::Error const err) {
 		thrown = true;
-		EXPECT(err == detail::error::Parse::InvalidArgument);
+		EXPECT(err == detail::Error::InvalidArgument);
 	}
 	EXPECT(thrown);
 }
@@ -79,21 +80,21 @@ TEST_CASE(parser_options) {
 	};
 
 	auto outcome = get_outcome(parameters, {"-a=x", "-b", "42"});
-	EXPECT(outcome == detail::ParseOutcome::Continue);
+	EXPECT(outcome == detail::Outcome::Continue);
 	EXPECT(a == "x");
 	EXPECT(b == 42);
 
 	a = {};
 	b = {};
 	outcome = get_outcome(parameters, {"--opta=x", "-b=42"});
-	EXPECT(outcome == detail::ParseOutcome::Continue);
+	EXPECT(outcome == detail::Outcome::Continue);
 	EXPECT(a == "x");
 	EXPECT(b == 42);
 
 	a = {};
 	b = {};
 	outcome = get_outcome(parameters, {"--optb=42", "-a", "x"});
-	EXPECT(outcome == detail::ParseOutcome::Continue);
+	EXPECT(outcome == detail::Outcome::Continue);
 	EXPECT(a == "x");
 	EXPECT(b == 42);
 
@@ -102,36 +103,36 @@ TEST_CASE(parser_options) {
 	auto thrown = false;
 	try {
 		outcome = get_outcome(parameters, {"--optb=abc", "-a=x"});
-	} catch (detail::error::Parse const err) {
+	} catch (detail::Error const err) {
 		thrown = true;
-		EXPECT(err == detail::error::Parse::InvalidArgument);
+		EXPECT(err == detail::Error::InvalidArgument);
 	}
 	EXPECT(thrown);
 
 	thrown = false;
 	try {
 		outcome = get_outcome(parameters, {"--version"});
-	} catch (detail::error::Parse const err) {
+	} catch (detail::Error const err) {
 		thrown = true;
-		EXPECT(err == detail::error::Parse::UnrecognizedOption);
+		EXPECT(err == detail::Error::UnrecognizedOption);
 	}
 	EXPECT(thrown);
 
 	thrown = false;
 	try {
 		outcome = get_outcome(parameters, {"--optb"});
-	} catch (detail::error::Parse const err) {
+	} catch (detail::Error const err) {
 		thrown = true;
-		EXPECT(err == detail::error::Parse::OptionRequiresArgument);
+		EXPECT(err == detail::Error::OptionRequiresArgument);
 	}
 	EXPECT(thrown);
 
 	thrown = false;
 	try {
 		outcome = get_outcome(parameters, {"-b"});
-	} catch (detail::error::Parse const err) {
+	} catch (detail::Error const err) {
 		thrown = true;
-		EXPECT(err == detail::error::Parse::OptionRequiresArgument);
+		EXPECT(err == detail::Error::OptionRequiresArgument);
 	}
 	EXPECT(thrown);
 }
@@ -145,7 +146,7 @@ TEST_CASE(parser_required) {
 	};
 
 	auto outcome = get_outcome(parameters, {"42", "y"});
-	EXPECT(outcome == detail::ParseOutcome::Continue);
+	EXPECT(outcome == detail::Outcome::Continue);
 	EXPECT(a == 42);
 	EXPECT(b == "y");
 
@@ -154,9 +155,9 @@ TEST_CASE(parser_required) {
 	auto thrown = false;
 	try {
 		outcome = get_outcome(parameters, {"42"});
-	} catch (detail::error::Parse const error) {
+	} catch (detail::Error const error) {
 		thrown = true;
-		EXPECT(error == detail::error::Parse::MissingRequiredArgument);
+		EXPECT(error == detail::Error::MissingRequiredArgument);
 	}
 	EXPECT(thrown);
 
@@ -165,9 +166,9 @@ TEST_CASE(parser_required) {
 	thrown = false;
 	try {
 		outcome = get_outcome(parameters, {"42", "y", "foo"});
-	} catch (detail::error::Parse const error) {
+	} catch (detail::Error const error) {
 		thrown = true;
-		EXPECT(error == detail::error::Parse::UnknownArgument);
+		EXPECT(error == detail::Error::UnknownArgument);
 	}
 	EXPECT(thrown);
 
@@ -176,9 +177,9 @@ TEST_CASE(parser_required) {
 	thrown = false;
 	try {
 		outcome = get_outcome(parameters, {"foo", "y"});
-	} catch (detail::error::Parse const error) {
+	} catch (detail::Error const error) {
 		thrown = true;
-		EXPECT(error == detail::error::Parse::InvalidArgument);
+		EXPECT(error == detail::Error::InvalidArgument);
 	}
 	EXPECT(thrown);
 }
@@ -192,32 +193,32 @@ TEST_CASE(parser_optional) {
 	};
 
 	auto outcome = get_outcome(parameters, {"x", "42"});
-	EXPECT(outcome == detail::ParseOutcome::Continue);
+	EXPECT(outcome == detail::Outcome::Continue);
 	EXPECT(a == "x");
 	EXPECT(b == 42);
 
 	a = {};
 	b = -5;
 	outcome = get_outcome(parameters, {"x"});
-	EXPECT(outcome == detail::ParseOutcome::Continue);
+	EXPECT(outcome == detail::Outcome::Continue);
 	EXPECT(a == "x");
 	EXPECT(b == -5);
 
 	auto thrown = false;
 	try {
 		outcome = get_outcome(parameters, {});
-	} catch (detail::error::Parse const error) {
+	} catch (detail::Error const error) {
 		thrown = true;
-		EXPECT(error == detail::error::Parse::MissingRequiredArgument);
+		EXPECT(error == detail::Error::MissingRequiredArgument);
 	}
 	EXPECT(thrown);
 
 	thrown = false;
 	try {
 		outcome = get_outcome(parameters, {"x", "42", "foo"});
-	} catch (detail::error::Parse const error) {
+	} catch (detail::Error const error) {
 		thrown = true;
-		EXPECT(error == detail::error::Parse::UnknownArgument);
+		EXPECT(error == detail::Error::UnknownArgument);
 	}
 	EXPECT(thrown);
 }
@@ -231,7 +232,7 @@ TEST_CASE(parser_list) {
 	};
 
 	auto outcome = get_outcome(parameters, {"-f", "zero", "one", "two"});
-	EXPECT(outcome == detail::ParseOutcome::Continue);
+	EXPECT(outcome == detail::Outcome::Continue);
 	EXPECT(flag);
 	ASSERT(list.size() == 3);
 	EXPECT(list[0] == "zero");
@@ -241,7 +242,7 @@ TEST_CASE(parser_list) {
 	flag = {};
 	list.clear();
 	outcome = get_outcome(parameters, {"--flag"});
-	EXPECT(outcome == detail::ParseOutcome::Continue);
+	EXPECT(outcome == detail::Outcome::Continue);
 	EXPECT(flag);
 	ASSERT(list.empty());
 }
@@ -260,9 +261,9 @@ TEST_CASE(parser_parameter_errors) {
 			positional_required(str, "str0"),
 		};
 		get_outcome(parameters, {});
-	} catch (detail::error::Parameter const err) {
+	} catch (detail::Error const err) {
 		thrown = true;
-		EXPECT(err == detail::error::Parameter::ExtraneousPositional);
+		EXPECT(err == detail::Error::ExtraneousPositional);
 	}
 	EXPECT(thrown);
 
@@ -273,9 +274,9 @@ TEST_CASE(parser_parameter_errors) {
 			positional_required(i, "int1"),
 		};
 		get_outcome(parameters, {});
-	} catch (detail::error::Parameter const err) {
+	} catch (detail::Error const err) {
 		thrown = true;
-		EXPECT(err == detail::error::Parameter::ExtraneousPositional);
+		EXPECT(err == detail::Error::ExtraneousPositional);
 	}
 	EXPECT(thrown);
 }
@@ -289,9 +290,9 @@ TEST_CASE(parser_unexpected_tokens) {
 			named_flag(flag, "f,flag"),
 		};
 		get_outcome(parameters, {"-f=true=false"});
-	} catch (detail::error::Parse const err) {
+	} catch (detail::Error const err) {
 		thrown = true;
-		EXPECT(err == detail::error::Parse::UnexpectedToken);
+		EXPECT(err == detail::Error::UnexpectedToken);
 	}
 	EXPECT(thrown);
 }

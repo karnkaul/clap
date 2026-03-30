@@ -1,8 +1,8 @@
 #include "clap/parameter.hpp"
 #include "clap/printer.hpp"
-#include "detail/common.hpp"
 #include "detail/parser.hpp"
 #include "detail/scanner.hpp"
+#include "detail/types.hpp"
 #include "detail/visitor.hpp"
 #include <algorithm>
 #include <cassert>
@@ -90,50 +90,18 @@ auto Scanner::to_token(Token::Type const type, std::size_t const length) -> Toke
 	return ret;
 }
 
-auto ParseFrame2::create(PrinterWrapper const& printer, std::span<Parameter const> parameters) noexcept(false) -> ParseFrame2 {
-	auto ret = ParseFrame2{};
-	ret.named_parameters.reserve(parameters.size());
-	ret.positional_parameters.reserve(parameters.size());
+PrinterWrapper::PrinterWrapper(Ptr<IPrinter> printer, std::string_view program_name) noexcept(true)
+	: printer(printer ? printer : &IPrinter::default_printer()), program_name(program_name) {}
+
+Frame::Frame(PrinterWrapper const& printer, std::span<Parameter const> parameters) noexcept(false) {
+	named_parameters.reserve(parameters.size());
+	positional_parameters.reserve(parameters.size());
 
 	auto positionals_ended = false;
 	auto const check_extraneous_positional = [&](auto const& positional) {
 		if (!positionals_ended) { return; }
-		printer.printerr_prefixed("extraneous positional: '{}'", positional.name);
-		throw error::Parameter{error::Parameter::ExtraneousPositional};
-	};
-
-	auto const visitor = Visitor{
-		[&](parameter::Named const& n) { ret.named_parameters.push_back(&n); },
-		[&](parameter::Positional const& p) {
-			check_extraneous_positional(p);
-			if (p.type == parameter::Type::Optional) { positionals_ended = true; }
-			ret.positional_parameters.push_back(&p);
-		},
-		[&](parameter::List const& l) {
-			check_extraneous_positional(l);
-			ret.list_parameter = &l;
-			positionals_ended = true;
-		},
-	};
-
-	for (auto const& parameter : parameters) { std::visit(visitor, parameter); }
-	return ret;
-}
-
-auto ParseFrame2::create(PrinterWrapper const& printer, Command const& command) noexcept(false) -> ParseFrame2 {
-	auto ret = create(printer, command.parameters);
-	ret.command = &command;
-	return ret;
-}
-
-void ParseFrame::recreate(PrinterWrapper const& printer, std::span<Parameter const> parameters) noexcept(false) {
-	reset(parameters.size());
-
-	auto positionals_ended = false;
-	auto const check_extraneous_positional = [&](auto const& positional) {
-		if (!positionals_ended) { return; }
-		printer.printerr_prefixed("extraneous positional: '{}'", positional.name);
-		throw error::Parameter{error::Parameter::ExtraneousPositional};
+		printer.prefixed_err("extraneous positional: '{}'", positional.name);
+		throw Error{Error::ExtraneousPositional};
 	};
 
 	auto const visitor = Visitor{
@@ -153,45 +121,41 @@ void ParseFrame::recreate(PrinterWrapper const& printer, std::span<Parameter con
 	for (auto const& parameter : parameters) { std::visit(visitor, parameter); }
 }
 
-void ParseFrame::recreate(PrinterWrapper const& printer, Command const& command) noexcept(false) {
-	this->command = &command;
-	recreate(printer, command.parameters);
+Context::Context(Input const& input) noexcept(false)
+	: printer(input.printer, input.program.name), main(printer, input.parameters), version(input.program.version), description(input.program.description) {
+	commands.reserve(input.commands.size());
+	for (auto const& command : input.commands) {
+		auto frame = Frame{printer, command.parameters};
+		frame.command = &command;
+		commands.push_back(std::move(frame));
+	}
 }
 
-void ParseFrame::reset(std::size_t const reserve) {
-	named_parameters.clear();
-	named_parameters.reserve(reserve);
-	positional_parameters.clear();
-	positional_parameters.reserve(reserve);
-	list_parameter = nullptr;
+Parser::Environment::Environment(Context const& context) noexcept(false)
+	: printer(context.printer), commands(context.commands), version(context.version), description(context.description), frame(&context.main) {}
+
+auto Parser::Environment::next_positional() -> Ptr<parameter::Positional const> {
+	if (positional_index >= frame->positional_parameters.size()) { return nullptr; }
+	return frame->positional_parameters[positional_index++];
 }
 
-auto ParseContext::create(ParseInput const& input) noexcept(false) -> ParseContext {
-	auto ret = ParseContext{
-		.printer = PrinterWrapper{.printer = input.printer, .program_name = input.program.name},
-		.version = input.program.version,
-		.description = input.program.description,
-	};
-	ret.main = ParseFrame2::create(ret.printer, input.parameters);
-	ret.commands.reserve(input.commands.size());
-	for (auto const& command : input.commands) { ret.commands.push_back(ParseFrame2::create(ret.printer, command)); }
-	return ret;
+auto Parser::Environment::set_command_frame(std::string_view const identifier) -> bool {
+	auto const it = std::ranges::find_if(commands, [identifier](Frame const& f) { return f.command->identifier == identifier; });
+	if (it == commands.end()) { return false; }
+
+	frame = &*it;
+	positional_index = 0uz;
+	return true;
 }
 
-Parser::Parser(ParseInput const& input, std::span<std::string_view const> args) : m_program(input.program), m_commands(input.commands), m_scanner(args) {
-	m_printer = PrinterWrapper{
-		.printer = input.printer ? input.printer : &IPrinter::default_printer(),
-		.program_name = m_program.name,
-	};
-	m_frame.recreate(m_printer, input.parameters);
-}
+Parser::Parser(Context const& context, std::span<std::string_view const> args) noexcept(false) : m_environment(context), m_scanner(args) {}
 
 auto Parser::parse() -> Result {
 	advance();
-	while (m_current.type != Token::Type::Eof && m_outcome == ParseOutcome::Continue) { parse_current(); }
+	while (m_current.type != Token::Type::Eof && m_outcome == Outcome::Continue) { parse_current(); }
 	check_required_parsed();
 	auto ret = Result{.outcome = m_outcome};
-	if (m_frame.command) { ret.command_identifier = m_frame.command->identifier; }
+	if (m_environment.frame->command) { ret.command_identifier = m_environment.frame->command->identifier; }
 	return ret;
 }
 
@@ -213,32 +177,32 @@ void Parser::parse_current() {
 	case Token::Type::MinusString: parse_short_options(); break;
 
 	case Token::Type::Eof:
-	case Token::Type::Equals: m_printer.printerr_prefixed("unexpected token: '{}'", m_current.lexeme); throw error::Parse{error::Parse::UnexpectedToken};
+	case Token::Type::Equals: m_environment.printer.prefixed_err("unexpected token: '{}'", m_current.lexeme); throw Error{Error::UnexpectedToken};
 
-	default: m_printer.printerr_prefixed("unrecognized token: '{}'", m_current.lexeme); throw error::Internal{error::Internal::UnrecognizedToken};
+	default: m_environment.printer.prefixed_err("unrecognized token: '{}'", m_current.lexeme); throw Error{Error::UnrecognizedToken};
 	}
 }
 
 void Parser::parse_argument() {
 	if (select_command()) { return; }
 
-	auto const* positional = next_positional();
+	auto const* positional = m_environment.next_positional();
 	if (!positional) {
-		if (!m_frame.list_parameter) {
-			m_printer.printerr_prefixed("unknown argument: '{}'", m_current.lexeme);
-			throw error::Parse{error::Parse::UnknownArgument};
+		if (!m_environment.frame->list_parameter) {
+			m_environment.printer.prefixed_err("unknown argument: '{}'", m_current.lexeme);
+			throw Error{Error::UnknownArgument};
 		}
-		if (!m_frame.list_parameter->parse(m_current.lexeme)) {
-			m_printer.printerr_prefixed("invalid {}: '{}'", m_frame.list_parameter->name, m_current.lexeme);
-			throw error::Parse{error::Parse::InvalidArgument};
+		if (!m_environment.frame->list_parameter->parse(m_current.lexeme)) {
+			m_environment.printer.prefixed_err("invalid {}: '{}'", m_environment.frame->list_parameter->name, m_current.lexeme);
+			throw Error{Error::InvalidArgument};
 		}
 		advance();
 		return;
 	}
 
 	if (!positional->parse(m_current.lexeme)) {
-		m_printer.printerr_prefixed("invalid {}: '{}'", positional->name, m_current.lexeme);
-		throw error::Parse{error::Parse::InvalidArgument};
+		m_environment.printer.prefixed_err("invalid {}: '{}'", positional->name, m_current.lexeme);
+		throw Error{Error::InvalidArgument};
 	}
 	advance();
 }
@@ -249,15 +213,15 @@ void Parser::parse_long_option() {
 	auto const option_token = m_current;
 	auto const word = option_token.lexeme.substr(2);
 
-	if (!m_frame.command && !m_program.version.empty() && word == "version") {
-		m_printer.printer->println(m_program.version);
-		m_outcome = ParseOutcome::EarlyExit;
+	if (!m_environment.frame->command && !m_environment.version.empty() && word == "version") {
+		m_environment.printer->println(m_environment.version);
+		m_outcome = Outcome::EarlyExit;
 		return;
 	}
 
 	if (word == "help") {
 		// TODO: print global/command help
-		m_outcome = ParseOutcome::EarlyExit;
+		m_outcome = Outcome::EarlyExit;
 		return;
 	}
 
@@ -273,8 +237,8 @@ void Parser::parse_short_options() {
 	for (; letters.size() > 1; letters.remove_prefix(1)) {
 		auto const& named = get_named(letters.front());
 		if (!named.is_flag) {
-			m_printer.printerr_prefixed("option requires an argument -- '{}'", named.letter);
-			throw error::Parse{error::Parse::OptionRequiresArgument};
+			m_environment.printer.prefixed_err("option requires an argument -- '{}'", named.letter);
+			throw Error{Error::OptionRequiresArgument};
 		}
 		named.parse("true");
 	}
@@ -301,59 +265,45 @@ void Parser::parse_last_option(parameter::Named const& named, std::string_view c
 
 void Parser::parse_option_value(parameter::Named const& named, std::string_view const option_lexeme) {
 	if (m_current.type != Token::Type::String) {
-		m_printer.printerr_prefixed("option '{}' requires an argument", option_lexeme);
-		throw error::Parse{error::Parse::OptionRequiresArgument};
+		m_environment.printer.prefixed_err("option '{}' requires an argument", option_lexeme);
+		throw Error{Error::OptionRequiresArgument};
 	}
 
 	if (!named.parse(m_current.lexeme)) {
-		m_printer.printerr_prefixed("invalid '{}': {}", named.word, m_current.lexeme);
-		throw error::Parse{error::Parse::InvalidArgument};
+		m_environment.printer.prefixed_err("invalid '{}': {}", named.word, m_current.lexeme);
+		throw Error{Error::InvalidArgument};
 	}
 
 	advance();
 }
 
-auto Parser::find_command(std::string_view const identifier) const -> Command const* {
-	auto const it = std::ranges::find_if(m_commands, [identifier](Command const& c) { return c.identifier == identifier; });
-	if (it == m_commands.end()) { return nullptr; }
-	return &*it;
-}
-
 template <typename T>
 auto Parser::get_named(T const t) const -> parameter::Named const& {
-	auto const pred = [t](parameter::Named const* n) {
+	auto const pred = [t](Ptr<parameter::Named const> n) {
 		if constexpr (std::same_as<T, char>) {
 			return n->letter == t;
 		} else {
 			return n->word == t;
 		}
 	};
-	auto const it = std::ranges::find_if(m_frame.named_parameters, pred);
-	if (it != m_frame.named_parameters.end()) { return **it; }
-	m_printer.printerr_prefixed("unrecognized option: '{}'", m_current.lexeme);
-	throw error::Parse{error::Parse::UnrecognizedOption};
+	auto const it = std::ranges::find_if(m_environment.frame->named_parameters, pred);
+	if (it != m_environment.frame->named_parameters.end()) { return **it; }
+	m_environment.printer.prefixed_err("unrecognized option: '{}'", m_current.lexeme);
+	throw Error{Error::UnrecognizedOption};
 }
 
 auto Parser::select_command() -> bool {
-	if (m_frame.command) { return false; }
-	auto const* command = find_command(m_current.lexeme);
-	if (!command) { return false; }
-	m_frame.recreate(m_printer, *command);
-	m_positional_index = 0;
-	advance();
-	return true;
-}
-
-auto Parser::next_positional() -> parameter::Positional const* {
-	if (m_positional_index >= m_frame.positional_parameters.size()) { return nullptr; }
-	return m_frame.positional_parameters[m_positional_index++];
+	if (m_environment.frame->command) { return false; }
+	auto const ret = m_environment.set_command_frame(m_current.lexeme);
+	if (ret) { advance(); }
+	return ret;
 }
 
 void Parser::check_required_parsed() {
-	auto const* remaining = next_positional();
+	auto const* remaining = m_environment.next_positional();
 	if (!remaining || remaining->type == parameter::Type::Optional) { return; }
-	m_printer.printerr_prefixed("missing required argument: '{}'", remaining->name);
-	throw error::Parse{error::Parse::MissingRequiredArgument};
+	m_environment.printer.prefixed_err("missing required argument: '{}'", remaining->name);
+	throw Error{Error::MissingRequiredArgument};
 }
 } // namespace detail
 
