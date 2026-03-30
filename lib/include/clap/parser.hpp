@@ -14,6 +14,7 @@ struct Context;
 } // namespace detail
 
 [[nodiscard]] auto to_program_name(std::string_view argv_0) -> std::string;
+[[nodiscard]] auto to_words(std::string_view line) -> std::vector<std::string_view>;
 
 class Parser {
   public:

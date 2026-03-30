@@ -8,14 +8,14 @@
 #include <string_view>
 
 namespace clap::detail {
-class Parser {
+class ParserImpl {
   public:
 	struct Result {
 		Outcome outcome{};
 		std::string_view command_identifier{};
 	};
 
-	explicit Parser(Context const& context, std::span<std::string_view const> args) noexcept(false);
+	explicit ParserImpl(Context const& context, std::span<std::string_view const> args) noexcept(false);
 
 	auto parse() noexcept(false) -> Result;
 

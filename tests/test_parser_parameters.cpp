@@ -1,5 +1,5 @@
 #include "clap/parameter.hpp"
-#include "detail/parser.hpp"
+#include "detail/parser_impl.hpp"
 #include "klib/unit_test/unit_test.hpp"
 #include <array>
 #include <string_view>
@@ -14,7 +14,7 @@ auto get_outcome(std::span<Parameter const> parameters, std::vector<std::string_
 		.program = Program{.name = "clap-test"},
 	};
 	auto parse_context = detail::Context{parse_input};
-	auto parser = detail::Parser{parse_context, args};
+	auto parser = detail::ParserImpl{parse_context, args};
 	return parser.parse().outcome;
 }
 

@@ -3,7 +3,7 @@
 #include "clap/parser.hpp"
 #include "clap/printer.hpp"
 #include "clap/result.hpp"
-#include "detail/parser.hpp"
+#include "detail/parser_impl.hpp"
 #include "detail/scanner.hpp"
 #include "detail/types.hpp"
 #include "detail/visitor.hpp"
@@ -212,15 +212,15 @@ void serialize_command_list(Joiner& out, std::span<Frame const> commands) {
 }
 } // namespace
 
-Parser::Environment::Environment(Context const& context) noexcept(false)
+ParserImpl::Environment::Environment(Context const& context) noexcept(false)
 	: printer(context.printer), commands(context.commands), version(context.version), description(context.description), frame(&context.main) {}
 
-auto Parser::Environment::next_positional() -> Ptr<parameter::Positional const> {
+auto ParserImpl::Environment::next_positional() -> Ptr<parameter::Positional const> {
 	if (positional_index >= frame->positional_parameters.size()) { return nullptr; }
 	return frame->positional_parameters[positional_index++];
 }
 
-auto Parser::Environment::set_command_frame(std::string_view const identifier) -> bool {
+auto ParserImpl::Environment::set_command_frame(std::string_view const identifier) -> bool {
 	auto const it = std::ranges::find_if(commands, [identifier](Frame const& f) { return f.command->identifier == identifier; });
 	if (it == commands.end()) { return false; }
 
@@ -229,7 +229,7 @@ auto Parser::Environment::set_command_frame(std::string_view const identifier) -
 	return true;
 }
 
-auto Parser::Environment::help_text_main() const -> std::string {
+auto ParserImpl::Environment::help_text_main() const -> std::string {
 	auto joiner = Joiner{};
 
 	joiner.text = "Usage:";
@@ -245,7 +245,7 @@ auto Parser::Environment::help_text_main() const -> std::string {
 	return std::move(joiner.text);
 }
 
-auto Parser::Environment::help_text_commands() const -> std::string {
+auto ParserImpl::Environment::help_text_commands() const -> std::string {
 	auto joiner = Joiner{};
 
 	joiner.text = "Usage:";
@@ -261,7 +261,7 @@ auto Parser::Environment::help_text_commands() const -> std::string {
 	return std::move(joiner.text);
 }
 
-auto Parser::Environment::help_text_command() const -> std::string {
+auto ParserImpl::Environment::help_text_command() const -> std::string {
 	assert(frame->command);
 
 	auto joiner = Joiner{};
@@ -280,15 +280,15 @@ auto Parser::Environment::help_text_command() const -> std::string {
 	return std::move(joiner.text);
 }
 
-auto Parser::Environment::help_text() const -> std::string {
+auto ParserImpl::Environment::help_text() const -> std::string {
 	if (frame->command) { return help_text_command(); }
 	if (!commands.empty()) { return help_text_commands(); }
 	return help_text_main();
 }
 
-Parser::Parser(Context const& context, std::span<std::string_view const> args) noexcept(false) : m_environment(context), m_scanner(args) {}
+ParserImpl::ParserImpl(Context const& context, std::span<std::string_view const> args) noexcept(false) : m_environment(context), m_scanner(args) {}
 
-auto Parser::parse() -> Result {
+auto ParserImpl::parse() -> Result {
 	advance();
 	while (m_current.type != Token::Type::Eof && m_outcome == Outcome::Continue) { parse_current(); }
 	if (m_outcome != Outcome::EarlyExit) { check_required_parsed(); }
@@ -297,9 +297,9 @@ auto Parser::parse() -> Result {
 	return ret;
 }
 
-void Parser::advance() { m_scanner.scan_next(m_current); }
+void ParserImpl::advance() { m_scanner.scan_next(m_current); }
 
-void Parser::parse_current() {
+void ParserImpl::parse_current() {
 	if (m_options_terminated) {
 		parse_argument();
 		return;
@@ -321,7 +321,7 @@ void Parser::parse_current() {
 	}
 }
 
-void Parser::parse_argument() {
+void ParserImpl::parse_argument() {
 	if (select_command()) { return; }
 
 	auto const* positional = m_environment.next_positional();
@@ -345,7 +345,7 @@ void Parser::parse_argument() {
 	advance();
 }
 
-void Parser::parse_long_option() {
+void ParserImpl::parse_long_option() {
 	assert(m_current.lexeme.starts_with("--") && m_current.lexeme.size() > 2);
 
 	auto const option_token = m_current;
@@ -368,7 +368,7 @@ void Parser::parse_long_option() {
 	parse_last_option(named, option_token.lexeme);
 }
 
-void Parser::parse_short_options() {
+void ParserImpl::parse_short_options() {
 	assert(m_current.lexeme.front() == '-' && m_current.lexeme.size() > 1);
 
 	auto letters = m_current.lexeme.substr(1);
@@ -386,7 +386,7 @@ void Parser::parse_short_options() {
 	parse_last_option(named, letters);
 }
 
-void Parser::parse_last_option(parameter::Named const& named, std::string_view const option_lexeme) {
+void ParserImpl::parse_last_option(parameter::Named const& named, std::string_view const option_lexeme) {
 	if (m_current.type == Token::Type::Equals) {
 		advance();
 		parse_option_value(named, option_lexeme);
@@ -401,7 +401,7 @@ void Parser::parse_last_option(parameter::Named const& named, std::string_view c
 	parse_option_value(named, option_lexeme);
 }
 
-void Parser::parse_option_value(parameter::Named const& named, std::string_view const option_lexeme) {
+void ParserImpl::parse_option_value(parameter::Named const& named, std::string_view const option_lexeme) {
 	if (m_current.type != Token::Type::String) {
 		m_environment.printer.prefixed_err("option '{}' requires an argument", option_lexeme);
 		throw Error{Error::OptionRequiresArgument};
@@ -416,7 +416,7 @@ void Parser::parse_option_value(parameter::Named const& named, std::string_view 
 }
 
 template <typename T>
-auto Parser::get_named(T const t) const -> parameter::Named const& {
+auto ParserImpl::get_named(T const t) const -> parameter::Named const& {
 	auto const pred = [t](Ptr<parameter::Named const> n) {
 		if constexpr (std::same_as<T, char>) {
 			return n->letter == t;
@@ -430,14 +430,14 @@ auto Parser::get_named(T const t) const -> parameter::Named const& {
 	throw Error{Error::UnrecognizedOption};
 }
 
-auto Parser::select_command() -> bool {
+auto ParserImpl::select_command() -> bool {
 	if (m_environment.frame->command) { return false; }
 	auto const ret = m_environment.set_command_frame(m_current.lexeme);
 	if (ret) { advance(); }
 	return ret;
 }
 
-void Parser::check_required_parsed() {
+void ParserImpl::check_required_parsed() {
 	auto const* remaining = m_environment.next_positional();
 	if (!remaining || remaining->type == parameter::Type::Optional) { return; }
 	m_environment.printer.prefixed_err("missing required argument: '{}'", remaining->name);
@@ -492,10 +492,16 @@ Parser::Parser(ParameterList parameters, Program const& program, IPrinter* custo
 auto Parser::parse_words(std::span<std::string_view const> words) const -> Result {
 	if (!m_context) { return Result::error(ExitCode::InvalidParser); }
 	try {
-		auto parser = detail::Parser{*m_context, words};
-		auto result = parser.parse();
+		auto impl = detail::ParserImpl{*m_context, words};
+		auto result = impl.parse();
 		return Result{ExitCode::Success, result.outcome, result.command_identifier};
 	} catch (detail::Error const error) { return Result::error(to_exit_code(error)); }
+}
+
+auto Parser::parse_line(std::string_view const line) const -> Result {
+	if (!m_context) { return Result::error(ExitCode::InvalidParser); }
+	auto const words = to_words(line);
+	return parse_words(words);
 }
 
 auto Parser::parse_main(int const argc, char const* const* argv, bool const skip_argv_0) const -> Result {
@@ -543,7 +549,65 @@ auto parameter::parse_to(bool& out, std::string_view const input) -> bool {
 }
 } // namespace clap
 
+namespace {
+class WordScanner {
+  public:
+	explicit constexpr WordScanner(std::string_view const line) : m_remain(line) {}
+
+	constexpr auto next(std::string_view& out) -> bool {
+		trim_whitespace();
+		if (m_remain.empty()) { return false; }
+		if (m_remain.front() == '"') {
+			out = scan_quoted();
+			return true;
+		}
+		out = scan_unquoted();
+		return true;
+	}
+
+  private:
+	static constexpr auto is_whitespace(char const c) { return c == ' ' || c == '\t'; };
+
+	constexpr void trim_whitespace() {
+		while (!m_remain.empty() && is_whitespace(m_remain.front())) { m_remain.remove_prefix(1); }
+	}
+
+	constexpr auto scan_quoted() -> std::string_view {
+		assert(!m_remain.empty() && m_remain.front() == '"');
+		m_remain.remove_prefix(1);
+
+		auto const i = m_remain.find('"');
+		if (i == std::string_view::npos) { return std::exchange(m_remain, {}); }
+
+		auto const ret = m_remain.substr(0, i);
+		m_remain.remove_prefix(i + 1);
+		return ret;
+	}
+
+	constexpr auto scan_unquoted() -> std::string_view {
+		for (auto length = 1uz; length < m_remain.size(); ++length) {
+			char const c = m_remain[length];
+			if (is_whitespace(c) || c == '"') {
+				auto const ret = m_remain.substr(0, length);
+				m_remain.remove_prefix(length);
+				return ret;
+			}
+		}
+		return std::exchange(m_remain, {});
+	}
+
+	std::string_view m_remain{};
+};
+} // namespace
+
 auto clap::to_program_name(std::string_view const argv_0) -> std::string { return fs::absolute(argv_0).stem().string(); }
+
+auto clap::to_words(std::string_view const line) -> std::vector<std::string_view> {
+	auto ret = std::vector<std::string_view>{};
+	auto scanner = WordScanner{line};
+	for (auto word = std::string_view{}; scanner.next(word);) { ret.push_back(word); }
+	return ret;
+}
 
 auto clap::command(std::string_view const identifier, ParameterList parameters, std::string_view const description, std::string_view epilogue) -> Command {
 	return Command{identifier, std::move(parameters), description, epilogue};
