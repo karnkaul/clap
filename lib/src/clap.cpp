@@ -1,4 +1,5 @@
 #include "clap/command.hpp"
+#include "clap/exception.hpp"
 #include "clap/parameter.hpp"
 #include "clap/parser.hpp"
 #include "clap/printer.hpp"
@@ -101,15 +102,14 @@ auto Scanner::to_token(Token::Type const type, std::size_t const length) -> Toke
 PrinterWrapper::PrinterWrapper(Ptr<IPrinter> printer, std::string_view program_name) noexcept(true)
 	: printer(printer ? printer : &IPrinter::default_printer()), program_name(program_name) {}
 
-Frame::Frame(PrinterWrapper const& printer, std::span<Parameter const> parameters) noexcept(false) {
+Frame::Frame(std::span<Parameter const> parameters) noexcept(false) {
 	named_parameters.reserve(parameters.size());
 	positional_parameters.reserve(parameters.size());
 
 	auto positionals_ended = false;
 	auto const check_extraneous = [&](auto const& t) {
 		if (!positionals_ended) { return; }
-		printer.prefixed_err("extraneous positional: '{}'", t.name);
-		throw Error{Error::ExtraneousPositional};
+		throw InvalidParameterException{std::format("extraneous positional: '{}'", t.name)};
 	};
 
 	auto const visitor = Visitor{
@@ -129,19 +129,19 @@ Frame::Frame(PrinterWrapper const& printer, std::span<Parameter const> parameter
 	for (auto const& parameter : parameters) { std::visit(visitor, parameter); }
 }
 
-Frame::Frame(std::span<parameter::Named const> options) noexcept(false) {
+Frame::Frame(std::span<parameter::Named const> options) noexcept(true) {
 	named_parameters.reserve(options.size());
 	for (auto const& parameter : options) { named_parameters.push_back(&parameter); }
 }
 
 Context::Context(ParameterInput const& input) noexcept(false)
-	: printer(input.printer, input.program.name), main(printer, input.parameters), version(input.program.version), description(input.program.description) {}
+	: printer(input.printer, input.program.name), main(input.parameters), version(input.program.version), description(input.program.description) {}
 
 Context::Context(CommandInput const& input) noexcept(false)
 	: printer(input.printer, input.program.name), main(input.options), version(input.program.version), description(input.program.description) {
 	commands.reserve(input.commands.size());
 	for (auto const& command : input.commands) {
-		auto frame = Frame{printer, command.parameters};
+		auto frame = Frame{command.parameters};
 		frame.command = &command;
 		commands.push_back(std::move(frame));
 	}
@@ -480,7 +480,6 @@ namespace {
 [[nodiscard]] constexpr auto to_exit_code(detail::Error const err) {
 	switch (err) {
 	case detail::Error::UnrecognizedToken: return ExitCode::InternalError;
-	case detail::Error::ExtraneousPositional: return ExitCode::ExtraneousParameter;
 	case detail::Error::UnknownArgument: return ExitCode::UnknownArgument;
 	case detail::Error::InvalidArgument: return ExitCode::InvalidArgument;
 	case detail::Error::UnrecognizedOption: return ExitCode::UnrecognizedOption;

@@ -62,6 +62,7 @@ template <typename T>
 	return Parse{.func = [&out](std::string_view const input) { return parse_to(out, input); }, .was_set = was_set};
 }
 
+/// \brief Named parameter (option / flag).
 struct Named {
 	template <typename T>
 		requires(ValueT<T> || FlagT<T>)
@@ -77,6 +78,7 @@ struct Named {
 	bool is_flag;
 };
 
+/// \brief Postional parameter (argument).
 struct Positional {
 	template <ValueT T>
 	explicit Positional(T& out, std::string_view const name, std::string_view const description, Type const type, bool* was_set)
@@ -88,6 +90,7 @@ struct Positional {
 	Parse parse;
 };
 
+/// \brief Positional list.
 struct List {
 	template <ValueT T>
 	explicit List(std::vector<T>& out, std::string_view const name, std::string_view const description, bool* was_set)
@@ -103,30 +106,37 @@ using Parameter = std::variant<parameter::Named, parameter::Positional, paramete
 using ParameterList = std::vector<Parameter>;
 using OptionList = std::vector<parameter::Named>;
 
+/// \returns parameter::Named with bound flag.
 template <parameter::FlagT T>
 // NOLINTNEXTLINE(readability-non-const-parameter)
 [[nodiscard]] auto named_flag(T& out, std::string_view const key, std::string_view const description = {}, bool* was_set = {}) {
 	return parameter::Named{out, key, description, was_set};
 }
 
+/// \returns parameter::Named with bound value.
 template <parameter::ValueT T>
 // NOLINTNEXTLINE(readability-non-const-parameter)
 [[nodiscard]] auto named_option(T& out, std::string_view const key, std::string_view const description = {}, bool* was_set = {}) {
 	return parameter::Named{out, key, description, was_set};
 }
 
+/// \returns Required parameter::Positional with bound value.
 template <parameter::ValueT T>
 // NOLINTNEXTLINE(readability-non-const-parameter)
 [[nodiscard]] auto positional_required(T& out, std::string_view const name, std::string_view const description = {}, bool* was_set = {}) {
 	return parameter::Positional{out, name, description, parameter::Type::Required, was_set};
 }
 
+/// \returns Optional parameter::Positional with bound value.
+/// Only one optional or list parameter can be present, and as the last positional parameter.
 template <parameter::ValueT T>
 // NOLINTNEXTLINE(readability-non-const-parameter)
 [[nodiscard]] auto positional_optional(T& out, std::string_view const name, std::string_view const description = {}, bool* was_set = {}) {
 	return parameter::Positional{out, name, description, parameter::Type::Optional, was_set};
 }
 
+/// \returns parameter::List with bound vector of values.
+/// Only one list or optional parameter can be present, and as the last positional parameter.
 template <parameter::ValueT T>
 // NOLINTNEXTLINE(readability-non-const-parameter)
 [[nodiscard]] auto positional_list(std::vector<T>& out, std::string_view const name, std::string_view const description = {}, bool* was_set = {}) {

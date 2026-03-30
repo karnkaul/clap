@@ -14,9 +14,6 @@ enum class Error : std::int8_t {
 	// internal
 	UnrecognizedToken,
 
-	// parameter
-	ExtraneousPositional,
-
 	// parse
 	UnknownArgument,
 	InvalidArgument,
@@ -47,8 +44,8 @@ struct PrinterWrapper {
 };
 
 struct Frame {
-	explicit Frame(PrinterWrapper const& printer, std::span<Parameter const> parameters) noexcept(false);
-	explicit Frame(std::span<parameter::Named const> options) noexcept(false);
+	explicit Frame(std::span<Parameter const> parameters) noexcept(false);
+	explicit Frame(std::span<parameter::Named const> options) noexcept(true);
 
 	Ptr<Command const> command{};
 	std::vector<Ptr<parameter::Named const>> named_parameters{};

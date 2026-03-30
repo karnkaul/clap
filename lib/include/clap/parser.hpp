@@ -13,17 +13,27 @@ namespace detail {
 struct Context;
 } // namespace detail
 
+/// \returns Filename stem, assuming argv_0 is a path to the executable.
 [[nodiscard]] auto to_program_name(std::string_view argv_0) -> std::string;
+/// \returns Whitespace-stripped list of words.
+/// Supports quoted strings.
 [[nodiscard]] auto to_words(std::string_view line) -> std::vector<std::string_view>;
 
 class Parser {
   public:
-	explicit Parser(ParameterList parameters, Program const& program = {}, IPrinter* custom_printer = {});
+	/// \brief Create a Parser for a list of Parameters.
+	/// Each parameter can be named or positional, the last positional may be optional or a list.
+	explicit Parser(ParameterList parameters, Program const& program = {}, IPrinter* custom_printer = {}) noexcept(false);
 
-	explicit Parser(CommandList commands, OptionList options = {}, Program const& program = {}, IPrinter* custom_printer = {});
+	/// \brief Create a Parser for a list of Commands.
+	/// The base/main frame can pass bound options (parameter::Named) but not arguments (parameter::Positional).
+	explicit Parser(CommandList commands, OptionList options = {}, Program const& program = {}, IPrinter* custom_printer = {}) noexcept(false);
 
+	/// \returns Result of parsing passed words.
 	[[nodiscard]] auto parse_words(std::span<std::string_view const> words) const -> Result;
+	/// \returns Result of parsing passed line split into words.
 	[[nodiscard]] auto parse_line(std::string_view line) const -> Result;
+	/// \returns Result of parsing args to main as words.
 	[[nodiscard]] auto parse_main(int argc, char const* const* argv, bool skip_argv_0 = true) const -> Result;
 
   private:

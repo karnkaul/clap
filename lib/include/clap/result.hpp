@@ -9,13 +9,12 @@ enum class ExitCode : std::int8_t {
 	Failure = EXIT_FAILURE,
 
 	InvalidParser = 101,
-	ExtraneousParameter = 102,
-	UnknownArgument = 103,
-	InvalidArgument = 104,
-	UnrecognizedOption = 105,
-	OptionRequiresArgument = 106,
-	MissingRequiredArgument = 107,
-	UnexpectedToken = 108,
+	UnknownArgument = 102,
+	InvalidArgument = 103,
+	UnrecognizedOption = 104,
+	OptionRequiresArgument = 105,
+	MissingRequiredArgument = 106,
+	UnexpectedToken = 107,
 	InternalError = 110,
 };
 
