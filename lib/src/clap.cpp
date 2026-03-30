@@ -137,7 +137,80 @@ Context::Context(Input const& input) noexcept(false)
 		frame.command = &command;
 		commands.push_back(std::move(frame));
 	}
+
+	if (!commands.empty() && !main.positional_parameters.empty()) {
+		printer.prefixed_err("extraneous positional (incompatible with commands): '{}'", main.positional_parameters.front()->name);
+		throw Error{Error::ExtraneousPositional};
+	}
 }
+
+namespace {
+struct Joiner {
+	void join(std::string_view const s) { join("{}", s); }
+
+	template <typename... Args>
+	void join(std::format_string<Args...> fmt, Args&&... args) {
+		if (!text.empty() && text.back() != '\n' && !text.ends_with(delimiter)) { text.append(delimiter); }
+		std::format_to(std::back_inserter(text), fmt, std::forward<Args>(args)...);
+	}
+
+	std::string_view delimiter{" "};
+
+	std::string text{};
+};
+
+void serialize_positionals_usage(Joiner& joiner, std::span<Ptr<parameter::Positional const> const> positionals, Ptr<parameter::List const> list) {
+	for (auto const& positional : positionals) {
+		if (positional->type == parameter::Type::Optional) {
+			joiner.join("[{}]", positional->name);
+		} else {
+			joiner.join("<{}>", positional->name);
+		}
+	}
+	if (list) { joiner.join("[{}]...", list->name); }
+	joiner.text.append("\n");
+}
+
+void serialize_named_list(Joiner& out, std::span<Ptr<parameter::Named const> const> parameters, bool const add_version) {
+	out.text.append("\nOPTIONS\n");
+	for (auto const* named : parameters) {
+		out.text.append("  ");
+		if (named->letter) {
+			std::format_to(std::back_inserter(out.text), "-{}", named->letter);
+			if (!named->word.empty()) { out.text.append(", "); }
+		} else {
+			out.text.append("    ");
+		}
+		if (!named->word.empty()) { std::format_to(std::back_inserter(out.text), "--{}", named->word); }
+		out.text.append("\n");
+		if (!named->description.empty()) { out.join("{: >8}{}\n", ' ', named->description); }
+	}
+	if (add_version) { std::format_to(std::back_inserter(out.text), "{: >6}--version\n{: >8}display version and exit\n", ' ', ' '); }
+	std::format_to(std::back_inserter(out.text), "{: >6}--help\n{: >8}display this help and exit\n", ' ', ' ');
+}
+
+void serialize_positional_list(Joiner& out, std::span<Ptr<parameter::Positional const> const> parameters, Ptr<parameter::List const> list) {
+	if (parameters.empty() && !list) { return; }
+	out.text.append("\nARGUMENTS\n");
+	for (auto const* positional : parameters) {
+		out.join("  {}\n", positional->name);
+		if (!positional->description.empty()) { out.join("{: >8}{}\n", ' ', positional->description); }
+	}
+	if (list) {
+		out.join("  {}\n", list->name);
+		if (!list->description.empty()) { out.join("{: >8}{}\n", ' ', list->description); }
+	}
+}
+
+void serialize_command_list(Joiner& out, std::span<Frame const> commands) {
+	if (commands.empty()) { return; }
+	out.text.append("\nCOMMANDS\n");
+	for (auto const& frame : commands) {
+		out.join("  {}\n", frame.command->identifier);
+		if (!frame.command->description.empty()) { out.join("{: >8}{}\n", ' ', frame.command->description); }
+	}
+}
+} // namespace
 
 Parser::Environment::Environment(Context const& context) noexcept(false)
 	: printer(context.printer), commands(context.commands), version(context.version), description(context.description), frame(&context.main) {}
@@ -156,12 +229,69 @@ auto Parser::Environment::set_command_frame(std::string_view const identifier) -
 	return true;
 }
 
+auto Parser::Environment::help_text_main() const -> std::string {
+	auto joiner = Joiner{};
+
+	joiner.text = "Usage:";
+	joiner.join(printer.program_name);
+	joiner.join("[OPTION]...");
+	serialize_positionals_usage(joiner, frame->positional_parameters, frame->list_parameter);
+
+	if (!description.empty()) { joiner.join("{}\n", description); }
+
+	serialize_named_list(joiner, frame->named_parameters, !version.empty());
+	serialize_positional_list(joiner, frame->positional_parameters, frame->list_parameter);
+
+	return std::move(joiner.text);
+}
+
+auto Parser::Environment::help_text_commands() const -> std::string {
+	auto joiner = Joiner{};
+
+	joiner.text = "Usage:";
+	joiner.join(printer.program_name);
+	joiner.join("[OPTION]...");
+	joiner.join("<COMMAND> [OPTION]... <ARG>...\n");
+
+	if (!description.empty()) { joiner.join("{}\n", description); }
+
+	serialize_named_list(joiner, frame->named_parameters, !version.empty());
+	serialize_command_list(joiner, commands);
+
+	return std::move(joiner.text);
+}
+
+auto Parser::Environment::help_text_command() const -> std::string {
+	assert(frame->command);
+
+	auto joiner = Joiner{};
+
+	joiner.text = "Usage:";
+	joiner.join(printer.program_name);
+	joiner.join("{}", frame->command->identifier);
+	joiner.join("[OPTION]...");
+	serialize_positionals_usage(joiner, frame->positional_parameters, frame->list_parameter);
+
+	if (!frame->command->description.empty()) { joiner.join("{}\n", frame->command->description); }
+
+	serialize_named_list(joiner, frame->named_parameters, false);
+	serialize_positional_list(joiner, frame->positional_parameters, frame->list_parameter);
+
+	return std::move(joiner.text);
+}
+
+auto Parser::Environment::help_text() const -> std::string {
+	if (frame->command) { return help_text_command(); }
+	if (!commands.empty()) { return help_text_commands(); }
+	return help_text_main();
+}
+
 Parser::Parser(Context const& context, std::span<std::string_view const> args) noexcept(false) : m_environment(context), m_scanner(args) {}
 
 auto Parser::parse() -> Result {
 	advance();
 	while (m_current.type != Token::Type::Eof && m_outcome == Outcome::Continue) { parse_current(); }
-	check_required_parsed();
+	if (m_outcome != Outcome::EarlyExit) { check_required_parsed(); }
 	auto ret = Result{.outcome = m_outcome};
 	if (m_environment.frame->command) { ret.command_identifier = m_environment.frame->command->identifier; }
 	return ret;
@@ -228,7 +358,7 @@ void Parser::parse_long_option() {
 	}
 
 	if (word == "help") {
-		// TODO: print global/command help
+		m_environment.printer->println(help_text());
 		m_outcome = Outcome::EarlyExit;
 		return;
 	}
@@ -414,3 +544,7 @@ auto parameter::parse_to(bool& out, std::string_view const input) -> bool {
 } // namespace clap
 
 auto clap::to_program_name(std::string_view const argv_0) -> std::string { return fs::absolute(argv_0).stem().string(); }
+
+auto clap::command(std::string_view const identifier, ParameterList parameters, std::string_view const description, std::string_view epilogue) -> Command {
+	return Command{identifier, std::move(parameters), description, epilogue};
+}

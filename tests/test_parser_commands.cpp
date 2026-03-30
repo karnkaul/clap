@@ -18,18 +18,18 @@ auto get_result(std::span<Parameter const> parameters, std::span<Command const> 
 TEST_CASE(parser_commands) {
 	auto flag = bool{};
 	auto const parameters = std::array{
-		named_flag(flag, "f,flag"),
+		named_flag(flag, "f,flag", "program flag"),
 	};
 
 	auto cmd_flag = bool{};
 	auto cmd_arg = std::string_view{};
 	auto cmd_parameters = std::vector{
-		named_flag(cmd_flag, "f,flag"),
-		positional_required(cmd_arg, "arg"),
+		named_flag(cmd_flag, "f,flag", "command flag"),
+		positional_required(cmd_arg, "arg", "command arg"),
 	};
 
 	auto const commands = std::array{
-		command("cmd", std::move(cmd_parameters)),
+		command("cmd", std::move(cmd_parameters), "command"),
 	};
 
 	auto result = get_result(parameters, commands, {"-f", "cmd", "foo"});
@@ -38,5 +38,11 @@ TEST_CASE(parser_commands) {
 	EXPECT(flag);
 	EXPECT(!cmd_flag);
 	EXPECT(cmd_arg == "foo");
+
+	result = get_result(parameters, commands, {"--help"});
+	EXPECT(result.outcome == Outcome::EarlyExit);
+
+	result = get_result(parameters, commands, {"cmd", "--help"});
+	EXPECT(result.outcome == Outcome::EarlyExit);
 }
 } // namespace
