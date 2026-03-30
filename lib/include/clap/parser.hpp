@@ -19,6 +19,8 @@ struct Context;
 /// Supports quoted strings.
 [[nodiscard]] auto to_words(std::string_view line) -> std::vector<std::string_view>;
 
+enum class CommandPolicy : std::int8_t { Required, Optional };
+
 class Parser {
   public:
 	/// \brief Create a Parser for a list of Parameters.
@@ -35,6 +37,10 @@ class Parser {
 	[[nodiscard]] auto parse_line(std::string_view line) const -> Result;
 	/// \returns Result of parsing args to main as words.
 	[[nodiscard]] auto parse_main(int argc, char const* const* argv, bool skip_argv_0 = true) const -> Result;
+
+	/// \brief Whether to treat a missing command as an error.
+	/// Only relevant for Command Parsers.
+	CommandPolicy command_policy{CommandPolicy::Required};
 
   private:
 	struct Deleter {

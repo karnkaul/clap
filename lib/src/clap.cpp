@@ -138,7 +138,8 @@ Context::Context(ParameterInput const& input) noexcept(false)
 	: printer(input.printer, input.program.name), main(input.parameters), version(input.program.version), description(input.program.description) {}
 
 Context::Context(CommandInput const& input) noexcept(false)
-	: printer(input.printer, input.program.name), main(input.options), version(input.program.version), description(input.program.description) {
+	: printer(input.printer, input.program.name), main(input.options), version(input.program.version), description(input.program.description),
+	  command_policy(input.command_policy) {
 	commands.reserve(input.commands.size());
 	for (auto const& command : input.commands) {
 		auto frame = Frame{command.parameters};
@@ -216,7 +217,8 @@ void serialize_command_list(Joiner& out, std::span<Frame const> commands) {
 } // namespace
 
 ParserImpl::Environment::Environment(Context const& context) noexcept(false)
-	: printer(context.printer), commands(context.commands), version(context.version), description(context.description), frame(&context.main) {}
+	: printer(context.printer), commands(context.commands), version(context.version), description(context.description), command_policy(context.command_policy),
+	  frame(&context.main) {}
 
 auto ParserImpl::Environment::next_positional() -> Ptr<parameter::Positional const> {
 	if (positional_index >= frame->positional_parameters.size()) { return nullptr; }
@@ -254,7 +256,12 @@ auto ParserImpl::Environment::help_text_commands() const -> std::string {
 	joiner.text = "Usage:";
 	joiner.join(printer.program_name);
 	joiner.join("[OPTION]...");
-	joiner.join("<COMMAND> [OPTION]... <ARG>...\n");
+	if (command_policy == CommandPolicy::Optional) {
+		joiner.join("[COMMAND]");
+	} else {
+		joiner.join("<COMMAND>");
+	}
+	joiner.join("[OPTION]... <ARG>...\n");
 
 	if (!description.empty()) { joiner.join("{}\n", description); }
 
@@ -289,14 +296,24 @@ auto ParserImpl::Environment::help_text() const -> std::string {
 	return help_text_main();
 }
 
+auto ParserImpl::Environment::is_missing_required_command() const -> bool {
+	return !commands.empty() && !frame->command && command_policy == CommandPolicy::Required;
+}
+
 ParserImpl::ParserImpl(Context const& context, std::span<std::string_view const> args) noexcept(false) : m_environment(context), m_scanner(args) {}
 
 auto ParserImpl::parse() -> Result {
 	advance();
 	while (m_current.type != Token::Type::Eof && m_outcome == Outcome::Continue) { parse_current(); }
-	if (m_outcome != Outcome::EarlyExit) { check_required_parsed(); }
 	auto ret = Result{.outcome = m_outcome};
 	if (m_environment.frame->command) { ret.command_identifier = m_environment.frame->command->identifier; }
+	if (m_outcome != Outcome::EarlyExit) {
+		check_required_parsed();
+		if (m_environment.is_missing_required_command()) {
+			m_environment.printer.prefixed_err("missing required command");
+			throw Error{Error::MissingRequiredCommand};
+		}
+	}
 	return ret;
 }
 
@@ -485,6 +502,7 @@ namespace {
 	case detail::Error::UnrecognizedOption: return ExitCode::UnrecognizedOption;
 	case detail::Error::OptionRequiresArgument: return ExitCode::OptionRequiresArgument;
 	case detail::Error::MissingRequiredArgument: return ExitCode::MissingRequiredArgument;
+	case detail::Error::MissingRequiredCommand: return ExitCode::MissingRequiredCommand;
 	case detail::Error::UnexpectedToken: return ExitCode::UnexpectedToken;
 	default: return ExitCode::Failure;
 	}
@@ -504,7 +522,7 @@ auto Parser::parse_words(std::span<std::string_view const> words) const -> Resul
 	if (!m_context) { return Result::error(ExitCode::InvalidParser); }
 	try {
 		auto impl = detail::ParserImpl{*m_context, words};
-		auto result = impl.parse();
+		auto const result = impl.parse();
 		return Result{ExitCode::Success, result.outcome, result.command_identifier};
 	} catch (detail::Error const error) { return Result::error(to_exit_code(error)); }
 }

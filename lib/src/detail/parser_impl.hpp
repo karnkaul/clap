@@ -34,11 +34,14 @@ class ParserImpl {
 
 		[[nodiscard]] auto help_text() const -> std::string;
 
+		[[nodiscard]] auto is_missing_required_command() const -> bool;
+
 		PrinterWrapper printer;
 
 		std::span<Frame const> commands{};
 		std::string_view version{};
 		std::string_view description{};
+		CommandPolicy command_policy{};
 
 		Ptr<Frame const> frame{};
 		std::size_t positional_index{};

@@ -47,4 +47,31 @@ TEST_CASE(parser_commands) {
 	result = get_result(parameters, commands, {"cmd", "--help"});
 	EXPECT(result.outcome == Outcome::EarlyExit);
 }
+
+TEST_CASE(parser_commands_missing) {
+	auto flag = bool{};
+	auto const parameters = std::vector<parameter::Named>{
+		named_flag(flag, "f,flag", "program flag"),
+	};
+
+	auto cmd_flag = bool{};
+	auto cmd_arg = std::string_view{};
+	auto cmd_parameters = std::vector<Parameter>{
+		named_flag(cmd_flag, "f,flag", "command flag"),
+		positional_required(cmd_arg, "arg", "command arg"),
+	};
+
+	auto const commands = std::array{
+		command("cmd", std::move(cmd_parameters), "command"),
+	};
+
+	auto thrown = false;
+	try {
+		get_result(parameters, commands, {"-f"});
+	} catch (detail::Error const err) {
+		thrown = true;
+		EXPECT(err == detail::Error::MissingRequiredCommand);
+	}
+	EXPECT(thrown);
+}
 } // namespace

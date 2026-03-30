@@ -1,6 +1,7 @@
 #pragma once
 #include "clap/command.hpp"
 #include "clap/parameter.hpp"
+#include "clap/parser.hpp"
 #include "clap/printer.hpp"
 #include "clap/program.hpp"
 #include <cstdint>
@@ -20,6 +21,7 @@ enum class Error : std::int8_t {
 	UnrecognizedOption,
 	OptionRequiresArgument,
 	MissingRequiredArgument,
+	MissingRequiredCommand,
 	UnexpectedToken,
 };
 
@@ -64,6 +66,7 @@ struct CommandInput {
 	std::span<Command const> commands{};
 	Program program{};
 	Ptr<IPrinter> printer{};
+	CommandPolicy command_policy{};
 };
 
 struct Context {
@@ -77,5 +80,6 @@ struct Context {
 
 	std::string_view version{};
 	std::string_view description{};
+	CommandPolicy command_policy{};
 };
 } // namespace clap::detail
