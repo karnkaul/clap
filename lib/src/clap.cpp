@@ -1,17 +1,25 @@
+#include "clap/command.hpp"
 #include "clap/parameter.hpp"
+#include "clap/parser.hpp"
 #include "clap/printer.hpp"
+#include "clap/result.hpp"
 #include "detail/parser.hpp"
 #include "detail/scanner.hpp"
 #include "detail/types.hpp"
 #include "detail/visitor.hpp"
 #include <algorithm>
 #include <cassert>
+#include <cstddef>
+#include <filesystem>
 #include <limits>
+#include <memory>
 #include <print>
 #include <ranges>
 #include <string_view>
 
 namespace clap {
+namespace fs = std::filesystem;
+
 namespace {
 [[nodiscard]] auto to_lower(char const in) {
 	auto const ret = std::tolower(static_cast<unsigned char>(in));
@@ -317,6 +325,57 @@ auto Parse::operator()(std::string_view const input) const -> bool {
 
 auto IPrinter::default_printer() -> IPrinter& { return Printer::self(); }
 
+namespace {
+[[nodiscard]] auto to_input(std::span<Parameter const> parameters, std::span<Command const> commands, Program const& program,
+							detail::Ptr<IPrinter> custom_printer) {
+	return detail::Input{
+		.parameters = parameters,
+		.commands = commands,
+		.program = program,
+		.printer = custom_printer ? custom_printer : &IPrinter::default_printer(),
+	};
+}
+
+[[nodiscard]] constexpr auto to_exit_code(detail::Error const err) {
+	switch (err) {
+	case detail::Error::UnrecognizedToken: return ExitCode::InternalError;
+	case detail::Error::ExtraneousPositional: return ExitCode::ExtraneousParameter;
+	case detail::Error::UnknownArgument: return ExitCode::UnknownArgument;
+	case detail::Error::InvalidArgument: return ExitCode::InvalidArgument;
+	case detail::Error::UnrecognizedOption: return ExitCode::UnrecognizedOption;
+	case detail::Error::OptionRequiresArgument: return ExitCode::OptionRequiresArgument;
+	case detail::Error::MissingRequiredArgument: return ExitCode::MissingRequiredArgument;
+	case detail::Error::UnexpectedToken: return ExitCode::UnexpectedToken;
+	default: return ExitCode::Failure;
+	}
+}
+} // namespace
+
+void Parser::Deleter::operator()(detail::Context* ptr) const noexcept { std::default_delete<detail::Context>{}(ptr); }
+
+Parser::Parser(ParameterList parameters, CommandList commands, Program const& program, IPrinter* custom_printer)
+	: m_parameters(std::move(parameters)), m_commands(std::move(commands)),
+	  m_context(new detail::Context{to_input(m_parameters, m_commands, program, custom_printer)}) {}
+
+Parser::Parser(ParameterList parameters, Program const& program, IPrinter* custom_printer) : Parser(std::move(parameters), {}, program, custom_printer) {}
+
+auto Parser::parse_words(std::span<std::string_view const> words) const -> Result {
+	if (!m_context) { return Result::error(ExitCode::InvalidParser); }
+	try {
+		auto parser = detail::Parser{*m_context, words};
+		auto result = parser.parse();
+		return Result{ExitCode::Success, result.outcome, result.command_identifier};
+	} catch (detail::Error const error) { return Result::error(to_exit_code(error)); }
+}
+
+auto Parser::parse_main(int const argc, char const* const* argv, bool const skip_argv_0) const -> Result {
+	if (!m_context) { return Result::error(ExitCode::InvalidParser); }
+	auto span = std::span{argv, std::size_t(argc)};
+	if (skip_argv_0 && !span.empty()) { span = span.subspan(1); }
+	auto const words = std::vector<std::string_view>{span.begin(), span.end()};
+	return parse_words(words);
+}
+
 void parameter::split_named_key(std::string_view const key, char& out_letter, std::string_view& out_word) {
 	if (key.empty()) { return; }
 
@@ -353,3 +412,5 @@ auto parameter::parse_to(bool& out, std::string_view const input) -> bool {
 	return true;
 }
 } // namespace clap
+
+auto clap::to_program_name(std::string_view const argv_0) -> std::string { return fs::absolute(argv_0).stem().string(); }

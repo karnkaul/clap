@@ -27,30 +27,30 @@ TEST_CASE(parser_flags) {
 	};
 
 	auto outcome = get_outcome(parameters, {"-ab"});
-	EXPECT(outcome == detail::Outcome::Continue);
+	EXPECT(outcome == Outcome::Continue);
 	EXPECT(a);
 	EXPECT(b);
 
 	a = b = false;
 	outcome = get_outcome(parameters, {"--flaga", "-b=true"});
-	EXPECT(outcome == detail::Outcome::Continue);
+	EXPECT(outcome == Outcome::Continue);
 	EXPECT(a);
 	EXPECT(b);
 
 	a = b = false;
 	outcome = get_outcome(parameters, {"--flagb=1", "-a"});
-	EXPECT(outcome == detail::Outcome::Continue);
+	EXPECT(outcome == Outcome::Continue);
 	EXPECT(a);
 	EXPECT(b);
 
 	a = b = false;
 	outcome = get_outcome(parameters, {"--flaga", "--flagb"});
-	EXPECT(outcome == detail::Outcome::Continue);
+	EXPECT(outcome == Outcome::Continue);
 	EXPECT(a);
 	EXPECT(b);
 
 	outcome = get_outcome(parameters, {"-ab", "--help"});
-	EXPECT(outcome == detail::Outcome::EarlyExit);
+	EXPECT(outcome == Outcome::EarlyExit);
 
 	auto thrown = false;
 	try {
@@ -80,21 +80,21 @@ TEST_CASE(parser_options) {
 	};
 
 	auto outcome = get_outcome(parameters, {"-a=x", "-b", "42"});
-	EXPECT(outcome == detail::Outcome::Continue);
+	EXPECT(outcome == Outcome::Continue);
 	EXPECT(a == "x");
 	EXPECT(b == 42);
 
 	a = {};
 	b = {};
 	outcome = get_outcome(parameters, {"--opta=x", "-b=42"});
-	EXPECT(outcome == detail::Outcome::Continue);
+	EXPECT(outcome == Outcome::Continue);
 	EXPECT(a == "x");
 	EXPECT(b == 42);
 
 	a = {};
 	b = {};
 	outcome = get_outcome(parameters, {"--optb=42", "-a", "x"});
-	EXPECT(outcome == detail::Outcome::Continue);
+	EXPECT(outcome == Outcome::Continue);
 	EXPECT(a == "x");
 	EXPECT(b == 42);
 
@@ -146,7 +146,7 @@ TEST_CASE(parser_required) {
 	};
 
 	auto outcome = get_outcome(parameters, {"42", "y"});
-	EXPECT(outcome == detail::Outcome::Continue);
+	EXPECT(outcome == Outcome::Continue);
 	EXPECT(a == 42);
 	EXPECT(b == "y");
 
@@ -193,14 +193,14 @@ TEST_CASE(parser_optional) {
 	};
 
 	auto outcome = get_outcome(parameters, {"x", "42"});
-	EXPECT(outcome == detail::Outcome::Continue);
+	EXPECT(outcome == Outcome::Continue);
 	EXPECT(a == "x");
 	EXPECT(b == 42);
 
 	a = {};
 	b = -5;
 	outcome = get_outcome(parameters, {"x"});
-	EXPECT(outcome == detail::Outcome::Continue);
+	EXPECT(outcome == Outcome::Continue);
 	EXPECT(a == "x");
 	EXPECT(b == -5);
 
@@ -232,7 +232,7 @@ TEST_CASE(parser_list) {
 	};
 
 	auto outcome = get_outcome(parameters, {"-f", "zero", "one", "two"});
-	EXPECT(outcome == detail::Outcome::Continue);
+	EXPECT(outcome == Outcome::Continue);
 	EXPECT(flag);
 	ASSERT(list.size() == 3);
 	EXPECT(list[0] == "zero");
@@ -242,7 +242,7 @@ TEST_CASE(parser_list) {
 	flag = {};
 	list.clear();
 	outcome = get_outcome(parameters, {"--flag"});
-	EXPECT(outcome == detail::Outcome::Continue);
+	EXPECT(outcome == Outcome::Continue);
 	EXPECT(flag);
 	ASSERT(list.empty());
 }

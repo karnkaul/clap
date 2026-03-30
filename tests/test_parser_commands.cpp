@@ -33,7 +33,7 @@ TEST_CASE(parser_commands) {
 	};
 
 	auto result = get_result(parameters, commands, {"-f", "cmd", "foo"});
-	EXPECT(result.outcome == detail::Outcome::Continue);
+	EXPECT(result.outcome == Outcome::Continue);
 	EXPECT(result.command_identifier == commands[0].identifier);
 	EXPECT(flag);
 	EXPECT(!cmd_flag);

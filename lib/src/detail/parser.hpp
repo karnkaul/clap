@@ -1,5 +1,6 @@
 #pragma once
 #include "clap/parameter.hpp"
+#include "clap/result.hpp"
 #include "detail/scanner.hpp"
 #include "detail/types.hpp"
 #include <cstddef>

@@ -10,8 +10,6 @@
 #include <vector>
 
 namespace clap::detail {
-enum class Outcome : std::int8_t { Continue, EarlyExit };
-
 enum class Error : std::int8_t {
 	// internal
 	UnrecognizedToken,
