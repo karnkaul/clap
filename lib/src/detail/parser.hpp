@@ -4,6 +4,7 @@
 #include "clap/printer.hpp"
 #include "detail/common.hpp"
 #include "detail/scanner.hpp"
+#include <cstddef>
 #include <span>
 #include <string_view>
 
@@ -19,6 +20,18 @@ struct ParseInput {
 	std::span<Command const> commands{};
 	ParseProgram program{};
 	IPrinter* printer{};
+};
+
+struct ParseContext {
+	[[nodiscard]] static auto create(ParseInput const& input) noexcept(false) -> ParseContext;
+
+	PrinterWrapper printer{};
+
+	ParseFrame2 main{};
+	std::vector<ParseFrame2> commands{};
+
+	std::string_view version{};
+	std::string_view description{};
 };
 
 enum class ParseOutcome : std::int8_t { Continue, EarlyExit };
@@ -63,7 +76,8 @@ class Parser {
 	template <typename T>
 	[[nodiscard]] auto get_named(T t) const noexcept(false) -> parameter::Named const&;
 
-	auto select_command() -> bool;
+	[[nodiscard]] auto select_command() -> bool;
+	[[nodiscard]] auto next_positional() -> parameter::Positional const*;
 	void check_required_parsed();
 
 	PrinterWrapper m_printer{};
@@ -71,10 +85,9 @@ class Parser {
 	std::span<Command const> m_commands{};
 
 	ParseFrame m_frame{};
+	std::size_t m_positional_index{};
 
 	Scanner m_scanner;
-
-	Command const* m_command{};
 
 	Token m_current{};
 	bool m_options_terminated{};
