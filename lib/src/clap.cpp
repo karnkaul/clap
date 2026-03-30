@@ -300,7 +300,7 @@ auto ParserImpl::Environment::is_missing_required_command() const -> bool {
 	return !commands.empty() && !frame->command && command_policy == CommandPolicy::Required;
 }
 
-ParserImpl::ParserImpl(Context const& context, std::span<std::string_view const> args) noexcept(false) : m_environment(context), m_scanner(args) {}
+ParserImpl::ParserImpl(Context const& context, std::span<std::string_view const> args) noexcept(true) : m_environment(context), m_scanner(args) {}
 
 auto ParserImpl::parse() -> Result {
 	advance();
@@ -540,6 +540,8 @@ auto Parser::parse_main(int const argc, char const* const* argv, bool const skip
 	auto const words = std::vector<std::string_view>{span.begin(), span.end()};
 	return parse_words(words);
 }
+
+auto Parser::get_help_text() const -> std::string { return detail::ParserImpl{*m_context, {}}.help_text(); }
 
 void parameter::split_named_key(std::string_view const key, char& out_letter, std::string_view& out_word) {
 	if (key.empty()) { return; }

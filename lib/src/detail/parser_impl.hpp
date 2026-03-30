@@ -15,7 +15,7 @@ class ParserImpl {
 		std::string_view command_identifier{};
 	};
 
-	explicit ParserImpl(Context const& context, std::span<std::string_view const> args) noexcept(false);
+	explicit ParserImpl(Context const& context, std::span<std::string_view const> args) noexcept(true);
 
 	auto parse() noexcept(false) -> Result;
 

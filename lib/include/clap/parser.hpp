@@ -38,6 +38,9 @@ class Parser {
 	/// \returns Result of parsing args to main as words.
 	[[nodiscard]] auto parse_main(int argc, char const* const* argv, bool skip_argv_0 = true) const -> Result;
 
+	/// \returns Help text (that gets printed on "--help").
+	[[nodiscard]] auto get_help_text() const -> std::string;
+
 	/// \brief Whether to treat a missing command as an error.
 	/// Only relevant for Command Parsers.
 	CommandPolicy command_policy{CommandPolicy::Required};
