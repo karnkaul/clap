@@ -79,7 +79,7 @@ auto Scanner::minus(Token::Type const type) -> Token {
 }
 
 auto Scanner::scan_string() -> Token {
-	auto const length = std::min(m_current.find_first_of("-="), m_current.size());
+	auto const length = std::min(m_current.find('='), m_current.size());
 	return to_token(Token::Type::String, length);
 }
 
