@@ -1,9 +1,9 @@
 #pragma once
 #include "clap/command.hpp"
 #include "clap/parameter.hpp"
-#include "clap/parser.hpp"
 #include "clap/printer.hpp"
 #include "clap/program.hpp"
+#include "clap/spec.hpp"
 #include <cstdint>
 #include <format>
 #include <span>
@@ -55,23 +55,23 @@ struct Frame {
 	Ptr<parameter::List const> list_parameter{};
 };
 
-struct ParameterInput {
-	std::span<Parameter const> parameters{};
-	Program program{};
-	Ptr<IPrinter> printer{};
-};
+class Context {
+	ParameterList m_parameters{};
+	OptionList m_options{};
+	CommandList m_commands{};
 
-struct CommandInput {
-	std::span<parameter::Named const> options{};
-	std::span<Command const> commands{};
-	Program program{};
-	Ptr<IPrinter> printer{};
-	CommandPolicy command_policy{};
-};
+  public:
+	Context(Context const&) = delete;
+	Context(Context&&) = delete;
+	Context& operator=(Context&&) = delete;
+	Context& operator=(Context const&) = delete;
 
-struct Context {
-	explicit Context(ParameterInput const& input) noexcept(false);
-	explicit Context(CommandInput const& input) noexcept(false);
+	~Context() = default;
+
+	explicit Context(spec::Parameters spec) noexcept(false);
+	explicit Context(spec::Commands spec) noexcept(false);
+
+	void override_program_name_if_empty(std::string_view program_name);
 
 	PrinterWrapper printer;
 

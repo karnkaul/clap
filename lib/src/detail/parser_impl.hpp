@@ -28,9 +28,8 @@ class ParserImpl {
 		[[nodiscard]] auto next_positional() -> Ptr<parameter::Positional const>;
 		[[nodiscard]] auto set_command_frame(std::string_view identifier) -> bool;
 
-		[[nodiscard]] auto help_text_main() const -> std::string;
+		[[nodiscard]] auto help_text_parameters(bool for_command) const -> std::string;
 		[[nodiscard]] auto help_text_commands() const -> std::string;
-		[[nodiscard]] auto help_text_command() const -> std::string;
 
 		[[nodiscard]] auto help_text() const -> std::string;
 

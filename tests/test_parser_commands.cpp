@@ -1,19 +1,20 @@
+#include "clap/command.hpp"
 #include "clap/parameter.hpp"
+#include "clap/spec.hpp"
 #include "detail/parser_impl.hpp"
 #include "detail/types.hpp"
 #include "klib/unit_test/unit_test.hpp"
-#include <array>
 
 namespace {
 using namespace clap;
 
-auto get_result(std::span<parameter::Named const> parameters, std::span<Command const> commands, std::vector<std::string_view> const& args) {
-	auto parse_input = detail::CommandInput{
-		.options = parameters,
-		.commands = commands,
+auto get_result(OptionList options, CommandList commands, std::vector<std::string_view> const& args) {
+	auto spec = spec::Commands{
+		.options = std::move(options),
+		.commands = std::move(commands),
 		.program = Program{.name = "clap-test"},
 	};
-	auto parse_context = detail::Context{parse_input};
+	auto parse_context = detail::Context{std::move(spec)};
 	auto parser = detail::ParserImpl{parse_context, args};
 	return parser.parse();
 }
@@ -31,7 +32,7 @@ TEST_CASE(parser_commands) {
 		positional_required(cmd_arg, "arg", "command arg"),
 	};
 
-	auto const commands = std::array{
+	auto const commands = std::vector{
 		command("cmd", std::move(cmd_parameters), "command"),
 	};
 
@@ -51,7 +52,7 @@ TEST_CASE(parser_commands) {
 
 TEST_CASE(parser_commands_missing) {
 	auto flag = bool{};
-	auto const parameters = std::vector<parameter::Named>{
+	auto const options = OptionList{
 		named_flag(flag, "f,flag", "program flag"),
 	};
 
@@ -62,13 +63,13 @@ TEST_CASE(parser_commands_missing) {
 		positional_required(cmd_arg, "arg", "command arg"),
 	};
 
-	auto const commands = std::array{
+	auto const commands = CommandList{
 		command("cmd", std::move(cmd_parameters), "command"),
 	};
 
 	auto thrown = false;
 	try {
-		get_result(parameters, commands, {"-f"});
+		get_result(options, commands, {"-f"});
 	} catch (detail::Error const err) {
 		thrown = true;
 		EXPECT(err == detail::Error::MissingRequiredCommand);

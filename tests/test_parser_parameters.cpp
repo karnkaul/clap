@@ -1,5 +1,6 @@
 #include "clap/exception.hpp"
 #include "clap/parameter.hpp"
+#include "clap/spec.hpp"
 #include "detail/parser_impl.hpp"
 #include "detail/types.hpp"
 #include "klib/unit_test/unit_test.hpp"
@@ -9,12 +10,12 @@ namespace {
 using namespace clap;
 using namespace std::string_view_literals;
 
-auto get_outcome(std::span<Parameter const> parameters, std::vector<std::string_view> const& args) {
-	auto parse_input = detail::ParameterInput{
-		.parameters = parameters,
+auto get_outcome(ParameterList parameters, std::vector<std::string_view> const& args) {
+	auto spec = spec::Parameters{
+		.parameters = std::move(parameters),
 		.program = Program{.name = "clap-test"},
 	};
-	auto parse_context = detail::Context{parse_input};
+	auto parse_context = detail::Context{std::move(spec)};
 	auto parser = detail::ParserImpl{parse_context, args};
 	return parser.parse().outcome;
 }
@@ -22,7 +23,7 @@ auto get_outcome(std::span<Parameter const> parameters, std::vector<std::string_
 TEST_CASE(parser_flags) {
 	auto a = false;
 	auto b = false;
-	auto const parameters = std::vector<Parameter>{
+	auto const parameters = ParameterList{
 		named_flag(a, "a,flaga"),
 		named_flag(b, "b,flagb"),
 	};
