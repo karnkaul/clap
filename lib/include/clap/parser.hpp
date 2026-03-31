@@ -1,16 +1,12 @@
 #pragma once
-#include "clap/command.hpp"
-#include "clap/parameter.hpp"
-#include "clap/printer.hpp"
-#include "clap/program.hpp"
 #include "clap/result.hpp"
+#include "clap/spec.hpp"
 #include <memory>
 #include <span>
-#include <string_view>
 
 namespace clap {
 namespace detail {
-struct Context;
+class Context;
 } // namespace detail
 
 /// \returns Filename stem, assuming argv_0 is a path to the executable.
@@ -19,17 +15,12 @@ struct Context;
 /// Supports quoted strings.
 [[nodiscard]] auto to_words(std::string_view line) -> std::vector<std::string_view>;
 
-enum class CommandPolicy : std::int8_t { Required, Optional };
-
 class Parser {
   public:
 	/// \brief Create a Parser for a list of Parameters.
-	/// Each parameter can be named or positional, the last positional may be optional or a list.
-	explicit Parser(ParameterList parameters, Program const& program = {}, IPrinter* custom_printer = {}) noexcept(false);
-
+	explicit Parser(spec::Parameters spec) noexcept(false);
 	/// \brief Create a Parser for a list of Commands.
-	/// The base/main frame can pass bound options (parameter::Named) but not arguments (parameter::Positional).
-	explicit Parser(CommandList commands, OptionList options = {}, Program const& program = {}, IPrinter* custom_printer = {}) noexcept(false);
+	explicit Parser(spec::Commands spec) noexcept(false);
 
 	/// \returns Result of parsing passed words.
 	[[nodiscard]] auto parse_words(std::span<std::string_view const> words) const -> Result;
@@ -49,11 +40,6 @@ class Parser {
 	struct Deleter {
 		void operator()(detail::Context* ptr) const noexcept;
 	};
-
-	ParameterList m_parameters{};
-	OptionList m_options{};
-	CommandList m_commands{};
-
 	std::unique_ptr<detail::Context, Deleter> m_context{};
 };
 } // namespace clap

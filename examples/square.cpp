@@ -1,26 +1,27 @@
 #include "clap/build_version.hpp"
 #include "clap/parameter.hpp"
 #include "clap/parser.hpp"
-#include "clap/program.hpp"
+#include "clap/spec.hpp"
 #include <cstdlib>
 #include <print>
 
 namespace {
 [[nodiscard]] auto run(int const argc, char const* const* argv) {
-	auto const program_name = clap::to_program_name(*argv);
-	auto const program = clap::Program{
-		.name = program_name,
-		.version = clap::build_version_v,
-		.description = "print the square of an integer",
+	auto spec = clap::spec::Parameters{
+		.program =
+			{
+				.version = clap::build_version_v,
+				.description = "print the square of an integer",
+			},
 	};
 	auto input = int{};
 	auto verbose = bool{};
-	auto parameter_list = std::vector<clap::Parameter>{
+	spec.parameters = {
 		clap::named_flag(verbose, "v,verbose", "print full expression"),
 		clap::positional_required(input, "NUM", "integer to square"),
 	};
 
-	auto parser = clap::Parser{std::move(parameter_list), program};
+	auto parser = clap::Parser{std::move(spec)};
 	auto const result = parser.parse_main(argc, argv);
 	if (result.should_early_exit()) { return result.return_code(); }
 

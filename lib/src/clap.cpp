@@ -4,6 +4,7 @@
 #include "clap/parser.hpp"
 #include "clap/printer.hpp"
 #include "clap/result.hpp"
+#include "clap/spec.hpp"
 #include "detail/parser_impl.hpp"
 #include "detail/scanner.hpp"
 #include "detail/types.hpp"
@@ -135,18 +136,24 @@ Frame::Frame(std::span<parameter::Named const> options) noexcept(true) {
 	for (auto const& parameter : options) { named_parameters.push_back(&parameter); }
 }
 
-Context::Context(ParameterInput const& input) noexcept(false)
-	: printer(input.printer, input.program.name), main(input.parameters), version(input.program.version), description(input.program.description) {}
+Context::Context(spec::Parameters spec) noexcept(false)
+	: m_parameters(std::move(spec.parameters)), printer(spec.custom_printer, spec.program.name), main(m_parameters), version(spec.program.version),
+	  description(spec.program.description) {}
 
-Context::Context(CommandInput const& input) noexcept(false)
-	: printer(input.printer, input.program.name), main(input.options), version(input.program.version), description(input.program.description),
-	  command_policy(input.command_policy) {
-	commands.reserve(input.commands.size());
-	for (auto const& command : input.commands) {
+Context::Context(spec::Commands spec) noexcept(false)
+	: m_options(std::move(spec.options)), m_commands(std::move(spec.commands)), printer(spec.custom_printer, spec.program.name), main(m_options),
+	  version(spec.program.version), description(spec.program.description), command_policy(spec.policy) {
+	commands.reserve(m_commands.size());
+	for (auto const& command : m_commands) {
 		auto frame = Frame{command.parameters};
 		frame.command = &command;
 		commands.push_back(std::move(frame));
 	}
+}
+
+void Context::override_program_name_if_empty(std::string_view const program_name) {
+	if (!printer.program_name.empty()) { return; }
+	printer.program_name = program_name;
 }
 
 namespace {
@@ -235,17 +242,22 @@ auto ParserImpl::Environment::set_command_frame(std::string_view const identifie
 	return true;
 }
 
-auto ParserImpl::Environment::help_text_main() const -> std::string {
+auto ParserImpl::Environment::help_text_parameters(bool const for_command) const -> std::string {
+	assert(!for_command || frame->command);
+
 	auto joiner = Joiner{};
 
 	joiner.text = "Usage:";
 	joiner.join(printer.program_name);
+	if (for_command) { joiner.join("{}", frame->command->identifier); }
 	joiner.join("[OPTION]...");
 	serialize_positionals_usage(joiner, frame->positional_parameters, frame->list_parameter);
 
-	if (!description.empty()) { joiner.join("{}\n", description); }
+	auto const desc = for_command ? frame->command->description : description;
+	if (!desc.empty()) { joiner.join("{}\n", desc); }
 
-	serialize_named_list(joiner, frame->named_parameters, !version.empty());
+	auto const add_version = !for_command && !version.empty();
+	serialize_named_list(joiner, frame->named_parameters, add_version);
 	serialize_positional_list(joiner, frame->positional_parameters, frame->list_parameter);
 
 	return std::move(joiner.text);
@@ -257,11 +269,7 @@ auto ParserImpl::Environment::help_text_commands() const -> std::string {
 	joiner.text = "Usage:";
 	joiner.join(printer.program_name);
 	joiner.join("[OPTION]...");
-	if (command_policy == CommandPolicy::Optional) {
-		joiner.join("[COMMAND]");
-	} else {
-		joiner.join("<COMMAND>");
-	}
+	joiner.join(command_policy == CommandPolicy::Optional ? "[COMMAND]" : "<COMMAND>");
 	joiner.join("[OPTION]... <ARG>...\n");
 
 	if (!description.empty()) { joiner.join("{}\n", description); }
@@ -272,29 +280,10 @@ auto ParserImpl::Environment::help_text_commands() const -> std::string {
 	return std::move(joiner.text);
 }
 
-auto ParserImpl::Environment::help_text_command() const -> std::string {
-	assert(frame->command);
-
-	auto joiner = Joiner{};
-
-	joiner.text = "Usage:";
-	joiner.join(printer.program_name);
-	joiner.join("{}", frame->command->identifier);
-	joiner.join("[OPTION]...");
-	serialize_positionals_usage(joiner, frame->positional_parameters, frame->list_parameter);
-
-	if (!frame->command->description.empty()) { joiner.join("{}\n", frame->command->description); }
-
-	serialize_named_list(joiner, frame->named_parameters, false);
-	serialize_positional_list(joiner, frame->positional_parameters, frame->list_parameter);
-
-	return std::move(joiner.text);
-}
-
 auto ParserImpl::Environment::help_text() const -> std::string {
-	if (frame->command) { return help_text_command(); }
+	if (frame->command) { return help_text_parameters(true); }
 	if (!commands.empty()) { return help_text_commands(); }
-	return help_text_main();
+	return help_text_parameters(false);
 }
 
 auto ParserImpl::Environment::is_missing_required_command() const -> bool {
@@ -477,24 +466,6 @@ auto Parse::operator()(std::string_view const input) const -> bool {
 auto IPrinter::default_printer() -> IPrinter& { return Printer::self(); }
 
 namespace {
-[[nodiscard]] auto to_parameter_input(ParameterList const& parameters, Program const& program, detail::Ptr<IPrinter> custom_printer) {
-	return detail::ParameterInput{
-		.parameters = parameters,
-		.program = program,
-		.printer = custom_printer ? custom_printer : &IPrinter::default_printer(),
-	};
-}
-
-[[nodiscard]] auto to_command_input(OptionList const& options, std::span<Command const> commands, Program const& program,
-									detail::Ptr<IPrinter> custom_printer) {
-	return detail::CommandInput{
-		.options = options,
-		.commands = commands,
-		.program = program,
-		.printer = custom_printer ? custom_printer : &IPrinter::default_printer(),
-	};
-}
-
 [[nodiscard]] constexpr auto to_exit_code(detail::Error const err) {
 	switch (err) {
 	case detail::Error::UnrecognizedToken: return ExitCode::InternalError;
@@ -512,12 +483,9 @@ namespace {
 
 void Parser::Deleter::operator()(detail::Context* ptr) const noexcept { std::default_delete<detail::Context>{}(ptr); }
 
-Parser::Parser(ParameterList parameters, Program const& program, IPrinter* custom_printer)
-	: m_parameters(std::move(parameters)), m_context(new detail::Context{to_parameter_input(m_parameters, program, custom_printer)}) {}
+Parser::Parser(spec::Parameters spec) : m_context(new detail::Context{std::move(spec)}) {}
 
-Parser::Parser(CommandList commands, OptionList options, Program const& program, IPrinter* custom_printer)
-	: m_options(std::move(options)), m_commands(std::move(commands)),
-	  m_context(new detail::Context{to_command_input(m_options, m_commands, program, custom_printer)}) {}
+Parser::Parser(spec::Commands spec) : m_context(new detail::Context{std::move(spec)}) {}
 
 auto Parser::parse_words(std::span<std::string_view const> words) const -> Result {
 	if (!m_context) { return Result::error(ExitCode::InvalidParser); }
@@ -537,7 +505,12 @@ auto Parser::parse_line(std::string_view const line) const -> Result {
 auto Parser::parse_main(int const argc, char const* const* argv, bool const skip_argv_0) const -> Result {
 	if (!m_context) { return Result::error(ExitCode::InvalidParser); }
 	auto span = std::span{argv, std::size_t(argc)};
-	if (skip_argv_0 && !span.empty()) { span = span.subspan(1); }
+	auto program_name = std::string{};
+	if (skip_argv_0 && !span.empty()) {
+		program_name = to_program_name(span.front());
+		m_context->override_program_name_if_empty(program_name);
+		span = span.subspan(1);
+	}
 	auto const words = std::vector<std::string_view>{span.begin(), span.end()};
 	return parse_words(words);
 }

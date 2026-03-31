@@ -2,7 +2,7 @@
 #include "clap/command.hpp"
 #include "clap/parameter.hpp"
 #include "clap/parser.hpp"
-#include "clap/program.hpp"
+#include "clap/spec.hpp"
 #include <algorithm>
 #include <cmath>
 #include <cstdlib>
@@ -26,7 +26,7 @@ class ICommand {
 
 	[[nodiscard]] virtual auto get_identifier() const -> std::string_view = 0;
 	[[nodiscard]] virtual auto get_description() const -> std::string_view = 0;
-	[[nodiscard]] virtual auto get_parameters() -> std::vector<clap::Parameter> = 0;
+	[[nodiscard]] virtual auto get_parameters() -> clap::ParameterList = 0;
 
 	virtual auto execute() -> int = 0;
 };
@@ -35,7 +35,7 @@ class LargestFile : public ICommand {
 	[[nodiscard]] auto get_identifier() const -> std::string_view final { return "largest-file"; }
 	[[nodiscard]] auto get_description() const -> std::string_view final { return "print the file with the largest size"; }
 
-	[[nodiscard]] auto get_parameters() -> std::vector<clap::Parameter> final {
+	[[nodiscard]] auto get_parameters() -> clap::ParameterList final {
 		return {
 			clap::named_flag(m_verbose, "v,verbose", "list every file"),
 			clap::positional_list(m_paths, "PATH", "list of file paths"),
@@ -74,7 +74,7 @@ class Pow : public ICommand {
 	[[nodiscard]] auto get_identifier() const -> std::string_view final { return "pow"; }
 	[[nodiscard]] auto get_description() const -> std::string_view final { return "raise a number to a power"; }
 
-	[[nodiscard]] auto get_parameters() -> std::vector<clap::Parameter> final {
+	[[nodiscard]] auto get_parameters() -> clap::ParameterList final {
 		return {
 			clap::named_flag(m_verbose, "v,verbose", "print entire expression"),
 			clap::positional_required(m_var, "VAR", "variable to raise"),
@@ -102,18 +102,18 @@ class App {
 	}
 
 	[[nodiscard]] auto run(int const argc, char const* const* argv) {
-		auto const program_name = clap::to_program_name(*argv);
-		auto const program = clap::Program{
-			.name = program_name,
-			.version = clap::build_version_v,
-			.description = "print the square of an integer",
+		auto spec = clap::spec::Commands{
+			.program =
+				{
+					.version = clap::build_version_v,
+					.description = "print the square of an integer",
+				},
 		};
-		auto command_list = std::vector<clap::Command>{};
-		command_list.reserve(m_commands.size());
+		spec.commands.reserve(m_commands.size());
 		for (auto const& command : m_commands) {
-			command_list.push_back(clap::command(command->get_identifier(), command->get_parameters(), command->get_description()));
+			spec.commands.push_back(clap::command(command->get_identifier(), command->get_parameters(), command->get_description()));
 		}
-		auto parser = clap::Parser{std::move(command_list), {}, program};
+		auto parser = clap::Parser{std::move(spec)};
 		auto const result = parser.parse_main(argc, argv);
 		if (result.should_early_exit()) { return result.return_code(); }
 
