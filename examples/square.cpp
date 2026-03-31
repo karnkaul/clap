@@ -7,11 +7,9 @@
 
 namespace {
 [[nodiscard]] auto run(int const argc, char const* const* argv) {
-	auto const program_name = clap::to_program_name(*argv);
 	auto spec = clap::spec::Parameters{
 		.program =
 			{
-				.name = program_name,
 				.version = clap::build_version_v,
 				.description = "print the square of an integer",
 			},

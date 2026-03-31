@@ -6,7 +6,7 @@
 
 namespace clap {
 namespace detail {
-struct Context;
+class Context;
 } // namespace detail
 
 /// \returns Filename stem, assuming argv_0 is a path to the executable.
