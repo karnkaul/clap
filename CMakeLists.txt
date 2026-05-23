@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.24)
 
 set(package_name clap)
-project(${package_name} VERSION "0.1.1")
+project(${package_name} VERSION "0.1.2")
 
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -22,7 +22,7 @@ if(CLAP_BUILD_TESTS)
     include(FetchContent)
     FetchContent_Declare(klib
       GIT_REPOSITORY https://github.com/karnkaul/klib
-      GIT_TAG v0.6.1
+      GIT_TAG v0.6.4
       SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/ext/src/klib"
     )
     set(KLIB_UNIT_TEST ON)

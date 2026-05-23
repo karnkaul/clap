@@ -52,8 +52,7 @@ class ParserImpl {
 	void parse_argument();
 	void parse_long_option();
 	void parse_short_options();
-	void parse_last_option(parameter::Named const& named, std::string_view option_lexeme);
-	void parse_option_value(parameter::Named const& named, std::string_view option_lexeme);
+	void parse_option_value(parameter::Named const& named, std::string_view value, std::string_view option_lexeme);
 
 	template <typename T>
 	[[nodiscard]] auto get_named(T t) const noexcept(false) -> parameter::Named const&;

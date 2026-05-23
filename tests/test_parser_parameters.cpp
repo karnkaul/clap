@@ -139,6 +139,33 @@ TEST_CASE(parser_options) {
 	EXPECT(thrown);
 }
 
+TEST_CASE(parser_quoted) {
+	auto a = std::string_view{};
+	auto const parameters = std::vector<Parameter>{
+		named_option(a, "a,opta"),
+	};
+
+	auto outcome = get_outcome(parameters, {R"(-a="foo bar")"});
+	EXPECT(outcome == Outcome::Continue);
+	EXPECT(a == "foo bar");
+
+	outcome = get_outcome(parameters, {R"(-a="foo=bar")"});
+	EXPECT(outcome == Outcome::Continue);
+	EXPECT(a == "foo=bar");
+
+	outcome = get_outcome(parameters, {R"(-a="--foo=bar")"});
+	EXPECT(outcome == Outcome::Continue);
+	EXPECT(a == "--foo=bar");
+
+	outcome = get_outcome(parameters, {R"(-a="-f=bar")"});
+	EXPECT(outcome == Outcome::Continue);
+	EXPECT(a == "-f=bar");
+
+	outcome = get_outcome(parameters, {R"(-a="-f bar")"});
+	EXPECT(outcome == Outcome::Continue);
+	EXPECT(a == "-f bar");
+}
+
 TEST_CASE(parser_required) {
 	auto a = int{};
 	auto b = std::string{};
@@ -225,6 +252,39 @@ TEST_CASE(parser_optional) {
 	EXPECT(thrown);
 }
 
+TEST_CASE(parser_multi_optional) {
+	auto a = std::string_view{};
+	auto b = int{};
+	auto list = std::vector<std::string_view>{};
+	auto const parameters = std::vector<Parameter>{
+		positional_optional(a, "arga"),
+		positional_optional(b, "argb"),
+		positional_list(list, "list"),
+	};
+
+	auto outcome = get_outcome(parameters, {"x", "42"});
+	EXPECT(outcome == Outcome::Continue);
+	EXPECT(a == "x");
+	EXPECT(b == 42);
+
+	a = {};
+	b = 0;
+	outcome = get_outcome(parameters, {"x"});
+	EXPECT(outcome == Outcome::Continue);
+	EXPECT(a == "x");
+	EXPECT(b == 0);
+
+	a = {};
+	b = 0;
+	outcome = get_outcome(parameters, {"x", "42", "a", "b"});
+	EXPECT(outcome == Outcome::Continue);
+	EXPECT(a == "x");
+	EXPECT(b == 42);
+	ASSERT(list.size() == 2);
+	EXPECT(list[0] == "a");
+	EXPECT(list[1] == "b");
+}
+
 TEST_CASE(parser_list) {
 	auto flag = bool{};
 	auto list = std::vector<std::string_view>{};
@@ -274,22 +334,6 @@ TEST_CASE(parser_parameter_errors) {
 		};
 		get_outcome(parameters, {});
 	} catch (InvalidParameterException const& /*err*/) { thrown = true; }
-	EXPECT(thrown);
-}
-
-TEST_CASE(parser_unexpected_tokens) {
-	auto flag = bool{};
-
-	auto thrown = false;
-	try {
-		auto const parameters = std::vector<Parameter>{
-			named_flag(flag, "f,flag"),
-		};
-		get_outcome(parameters, {"-f=true=false"});
-	} catch (detail::Error const err) {
-		thrown = true;
-		EXPECT(err == detail::Error::UnexpectedToken);
-	}
 	EXPECT(thrown);
 }
 } // namespace
