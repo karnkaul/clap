@@ -121,12 +121,21 @@ Frame::Frame(std::span<Parameter const> parameters) noexcept(false) {
 		if (!positionals_ended) { return; }
 		throw InvalidParameterException{std::format("extraneous positional: '{}'", t.name)};
 	};
+	auto required_ended = false;
+	auto const check_required_after_optional = [&](parameter::Positional const& p) {
+		if (p.type == parameter::Type::Optional) {
+			required_ended = true;
+			return;
+		}
+		if (!required_ended) { return; }
+		throw InvalidParameterException{std::format("required positional after optional(s): '{}'", p.name)};
+	};
 
 	auto const visitor = Visitor{
 		[&](parameter::Named const& n) { named_parameters.push_back(&n); },
 		[&](parameter::Positional const& p) {
 			check_extraneous(p);
-			if (p.type == parameter::Type::Optional) { positionals_ended = true; }
+			check_required_after_optional(p);
 			positional_parameters.push_back(&p);
 		},
 		[&](parameter::List const& l) {
