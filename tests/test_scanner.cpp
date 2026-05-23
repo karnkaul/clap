@@ -77,23 +77,11 @@ TEST_CASE(scanner_mm_string_value) {
 
 	EXPECT(scanner.scan_next(token));
 	EXPECT(token.type == Token::Type::MinusMinusString);
-	EXPECT(token.lexeme == "--foo");
-	EXPECT(scanner.scan_next(token));
-	EXPECT(token.type == Token::Type::Equals);
-	EXPECT(token.lexeme == "=");
-	EXPECT(scanner.scan_next(token));
-	EXPECT(token.type == Token::Type::String);
-	EXPECT(token.lexeme == "bar");
+	EXPECT(token.lexeme == "--foo=bar");
 
 	EXPECT(scanner.scan_next(token));
 	EXPECT(token.type == Token::Type::MinusMinusString);
-	EXPECT(token.lexeme == "--fubar");
-	EXPECT(scanner.scan_next(token));
-	EXPECT(token.type == Token::Type::Equals);
-	EXPECT(token.lexeme == "=");
-	EXPECT(scanner.scan_next(token));
-	EXPECT(token.type == Token::Type::String);
-	EXPECT(token.lexeme == "42");
+	EXPECT(token.lexeme == "--fubar=42");
 
 	EXPECT(!scanner.scan_next(token));
 	EXPECT(token.type == Token::Type::Eof);
@@ -109,23 +97,11 @@ TEST_CASE(scanner_m_string_value) {
 
 	EXPECT(scanner.scan_next(token));
 	EXPECT(token.type == Token::Type::MinusString);
-	EXPECT(token.lexeme == "-foo");
-	EXPECT(scanner.scan_next(token));
-	EXPECT(token.type == Token::Type::Equals);
-	EXPECT(token.lexeme == "=");
-	EXPECT(scanner.scan_next(token));
-	EXPECT(token.type == Token::Type::String);
-	EXPECT(token.lexeme == "bar");
+	EXPECT(token.lexeme == "-foo=bar");
 
 	EXPECT(scanner.scan_next(token));
 	EXPECT(token.type == Token::Type::MinusString);
-	EXPECT(token.lexeme == "-fubar");
-	EXPECT(scanner.scan_next(token));
-	EXPECT(token.type == Token::Type::Equals);
-	EXPECT(token.lexeme == "=");
-	EXPECT(scanner.scan_next(token));
-	EXPECT(token.type == Token::Type::String);
-	EXPECT(token.lexeme == "42");
+	EXPECT(token.lexeme == "-fubar=42");
 
 	EXPECT(!scanner.scan_next(token));
 	EXPECT(token.type == Token::Type::Eof);
@@ -156,15 +132,7 @@ TEST_CASE(scanner_all) {
 
 	EXPECT(scanner.scan_next(token));
 	EXPECT(token.type == Token::Type::MinusString);
-	EXPECT(token.lexeme == "-fabc");
-
-	EXPECT(scanner.scan_next(token));
-	EXPECT(token.type == Token::Type::Equals);
-	EXPECT(token.lexeme == "=");
-
-	EXPECT(scanner.scan_next(token));
-	EXPECT(token.type == Token::Type::String);
-	EXPECT(token.lexeme == "42");
+	EXPECT(token.lexeme == "-fabc=42");
 
 	EXPECT(scanner.scan_next(token));
 	EXPECT(token.type == Token::Type::String);

@@ -24,7 +24,16 @@ namespace clap {
 namespace fs = std::filesystem;
 
 namespace {
+[[nodiscard]] constexpr auto strip_quotes(std::string_view in) {
+	if (in.starts_with('"')) {
+		in.remove_prefix(1);
+		if (in.ends_with('"')) { in.remove_suffix(1); }
+	}
+	return in;
+}
+
 [[nodiscard]] auto to_lower(char const in) {
+	if (int(in) < 32 || int(in) >= 127) { return in; }
 	auto const ret = std::tolower(static_cast<unsigned char>(in));
 	if (ret < 0) { return '\0'; }
 	assert(ret <= int(std::numeric_limits<char>::max()));
@@ -69,28 +78,15 @@ auto Scanner::scan_next() -> Token {
 
 	if (m_current == "--") { return to_token(Token::Type::MinusMinus, 2); }
 
-	if (m_current.starts_with("--")) { return minus(Token::Type::MinusMinusString); }
-	if (m_current.starts_with('-')) { return minus(Token::Type::MinusString); }
+	if (m_current.starts_with("--")) { return to_token(Token::Type::MinusMinusString); }
+	if (m_current.starts_with('-')) { return to_token(Token::Type::MinusString); }
 
-	if (m_current.starts_with('=')) { return to_token(Token::Type::Equals, 1); }
-
-	return scan_string();
+	return to_token(Token::Type::String);
 }
 
 auto Scanner::scan_quoted() -> Token {
-	m_current.remove_prefix(1);
-	if (m_current.ends_with('"')) { m_current.remove_suffix(1); }
-	return to_token(Token::Type::String, m_current.size());
-}
-
-auto Scanner::minus(Token::Type const type) -> Token {
-	auto const length = std::min(m_current.find('='), m_current.size());
-	return to_token(type, length);
-}
-
-auto Scanner::scan_string() -> Token {
-	auto const length = std::min(m_current.find('='), m_current.size());
-	return to_token(Token::Type::String, length);
+	m_current = strip_quotes(m_current);
+	return to_token(Token::Type::String);
 }
 
 void Scanner::advance() {
@@ -102,7 +98,8 @@ void Scanner::advance() {
 	m_remain = m_remain.subspan(1);
 }
 
-auto Scanner::to_token(Token::Type const type, std::size_t const length) -> Token {
+auto Scanner::to_token(Token::Type const type, std::size_t length) -> Token {
+	if (length == 0) { length = m_current.size(); }
 	auto const ret = Token{.type = type, .lexeme = m_current.substr(0, length)};
 	m_current.remove_prefix(length);
 	if (m_current.empty()) { advance(); }
@@ -174,6 +171,21 @@ void Context::override_program_name_if_empty(std::string_view const program_name
 }
 
 namespace {
+struct ArgSplit {
+	[[nodiscard]] static constexpr auto create(std::string_view const word) {
+		auto ret = ArgSplit{.left = strip_quotes(word)};
+		if (auto const i = ret.left.find('='); i != std::string_view::npos) {
+			ret.right = ret.left.substr(i + 1);
+			ret.left = ret.left.substr(0, i);
+		}
+		ret.right = strip_quotes(ret.right);
+		return ret;
+	}
+
+	std::string_view left{};
+	std::string_view right{};
+};
+
 struct Joiner {
 	void join(std::string_view const s) { join("{}", s); }
 
@@ -341,8 +353,7 @@ void ParserImpl::parse_current() {
 	case Token::Type::MinusMinusString: parse_long_option(); break;
 	case Token::Type::MinusString: parse_short_options(); break;
 
-	case Token::Type::Eof:
-	case Token::Type::Equals: m_environment.printer.prefixed_err("unexpected token: '{}'", m_current.lexeme); throw Error{Error::UnexpectedToken};
+	case Token::Type::Eof: m_environment.printer.prefixed_err("unexpected token: '{}'", m_current.lexeme); throw Error{Error::UnexpectedToken};
 
 	default: m_environment.printer.prefixed_err("unrecognized token: '{}'", m_current.lexeme); throw Error{Error::UnrecognizedToken};
 	}
@@ -390,15 +401,19 @@ void ParserImpl::parse_long_option() {
 		return;
 	}
 
-	auto const& named = get_named(word);
-	advance();
-	parse_last_option(named, option_token.lexeme);
+	auto const split = ArgSplit::create(word);
+	auto const& named = get_named(split.left);
+	parse_option_value(named, split.right, option_token.lexeme);
 }
 
 void ParserImpl::parse_short_options() {
 	assert(m_current.lexeme.front() == '-' && m_current.lexeme.size() > 1);
 
-	auto letters = m_current.lexeme.substr(1);
+	auto const option_token = m_current;
+
+	auto const word = option_token.lexeme.substr(1);
+	auto const split = ArgSplit::create(word);
+	auto letters = split.left;
 	for (; letters.size() > 1; letters.remove_prefix(1)) {
 		auto const& named = get_named(letters.front());
 		if (!named.is_flag) {
@@ -409,36 +424,30 @@ void ParserImpl::parse_short_options() {
 	}
 
 	auto const& named = get_named(letters.front());
-	advance();
-	parse_last_option(named, letters);
+	parse_option_value(named, split.right, option_token.lexeme);
 }
 
-void ParserImpl::parse_last_option(parameter::Named const& named, std::string_view const option_lexeme) {
-	if (m_current.type == Token::Type::Equals) {
+void ParserImpl::parse_option_value(parameter::Named const& named, std::string_view value, std::string_view const option_lexeme) {
+	if (!named.is_flag && value.empty()) {
 		advance();
-		parse_option_value(named, option_lexeme);
+		value = m_current.lexeme;
+	}
+
+	if (!value.empty()) {
+		if (!named.parse(value)) {
+			m_environment.printer.prefixed_err("invalid '{}': {}", named.word, value);
+			throw Error{Error::InvalidArgument};
+		}
+		advance();
 		return;
 	}
 
-	if (named.is_flag) {
-		named.parse("true");
-		return;
-	}
-
-	parse_option_value(named, option_lexeme);
-}
-
-void ParserImpl::parse_option_value(parameter::Named const& named, std::string_view const option_lexeme) {
-	if (m_current.type != Token::Type::String) {
+	if (!named.is_flag) {
 		m_environment.printer.prefixed_err("option '{}' requires an argument", option_lexeme);
 		throw Error{Error::OptionRequiresArgument};
 	}
 
-	if (!named.parse(m_current.lexeme)) {
-		m_environment.printer.prefixed_err("invalid '{}': {}", named.word, m_current.lexeme);
-		throw Error{Error::InvalidArgument};
-	}
-
+	named.parse("true");
 	advance();
 }
 

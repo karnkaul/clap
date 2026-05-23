@@ -6,7 +6,7 @@
 
 namespace clap::detail {
 struct Token {
-	enum class Type : std::int8_t { Eof, String, MinusString, MinusMinusString, Equals, MinusMinus };
+	enum class Type : std::int8_t { Eof, String, MinusString, MinusMinusString, MinusMinus };
 
 	Type type{};
 	std::string_view lexeme{};
@@ -21,12 +21,10 @@ class Scanner {
   private:
 	auto scan_next() -> Token;
 	auto scan_quoted() -> Token;
-	auto minus(Token::Type type) -> Token;
-	auto scan_string() -> Token;
 
 	void advance();
 
-	auto to_token(Token::Type type, std::size_t length) -> Token;
+	auto to_token(Token::Type type, std::size_t length = 0uz) -> Token;
 
 	std::span<std::string_view const> m_remain{};
 	std::string_view m_current{};

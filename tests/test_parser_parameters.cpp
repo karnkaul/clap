@@ -336,20 +336,4 @@ TEST_CASE(parser_parameter_errors) {
 	} catch (InvalidParameterException const& /*err*/) { thrown = true; }
 	EXPECT(thrown);
 }
-
-TEST_CASE(parser_unexpected_tokens) {
-	auto flag = bool{};
-
-	auto thrown = false;
-	try {
-		auto const parameters = std::vector<Parameter>{
-			named_flag(flag, "f,flag"),
-		};
-		get_outcome(parameters, {"-f=true=false"});
-	} catch (detail::Error const err) {
-		thrown = true;
-		EXPECT(err == detail::Error::UnexpectedToken);
-	}
-	EXPECT(thrown);
-}
 } // namespace
