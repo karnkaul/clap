@@ -65,6 +65,8 @@ auto Scanner::scan_next(Token& out) -> bool {
 }
 
 auto Scanner::scan_next() -> Token {
+	if (m_current.starts_with('"')) { return scan_quoted(); }
+
 	if (m_current == "--") { return to_token(Token::Type::MinusMinus, 2); }
 
 	if (m_current.starts_with("--")) { return minus(Token::Type::MinusMinusString); }
@@ -73,6 +75,12 @@ auto Scanner::scan_next() -> Token {
 	if (m_current.starts_with('=')) { return to_token(Token::Type::Equals, 1); }
 
 	return scan_string();
+}
+
+auto Scanner::scan_quoted() -> Token {
+	m_current.remove_prefix(1);
+	if (m_current.ends_with('"')) { m_current.remove_suffix(1); }
+	return to_token(Token::Type::String, m_current.size());
 }
 
 auto Scanner::minus(Token::Type const type) -> Token {

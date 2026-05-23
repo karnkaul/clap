@@ -139,6 +139,33 @@ TEST_CASE(parser_options) {
 	EXPECT(thrown);
 }
 
+TEST_CASE(parser_quoted) {
+	auto a = std::string_view{};
+	auto const parameters = std::vector<Parameter>{
+		named_option(a, "a,opta"),
+	};
+
+	auto outcome = get_outcome(parameters, {R"(-a="foo bar")"});
+	EXPECT(outcome == Outcome::Continue);
+	EXPECT(a == "foo bar");
+
+	outcome = get_outcome(parameters, {R"(-a="foo=bar")"});
+	EXPECT(outcome == Outcome::Continue);
+	EXPECT(a == "foo=bar");
+
+	outcome = get_outcome(parameters, {R"(-a="--foo=bar")"});
+	EXPECT(outcome == Outcome::Continue);
+	EXPECT(a == "--foo=bar");
+
+	outcome = get_outcome(parameters, {R"(-a="-f=bar")"});
+	EXPECT(outcome == Outcome::Continue);
+	EXPECT(a == "-f=bar");
+
+	outcome = get_outcome(parameters, {R"(-a="-f bar")"});
+	EXPECT(outcome == Outcome::Continue);
+	EXPECT(a == "-f bar");
+}
+
 TEST_CASE(parser_required) {
 	auto a = int{};
 	auto b = std::string{};

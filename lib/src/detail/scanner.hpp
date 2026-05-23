@@ -20,6 +20,7 @@ class Scanner {
 
   private:
 	auto scan_next() -> Token;
+	auto scan_quoted() -> Token;
 	auto minus(Token::Type type) -> Token;
 	auto scan_string() -> Token;
 
