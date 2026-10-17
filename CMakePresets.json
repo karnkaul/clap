@@ -82,7 +82,7 @@
       "name": "ninja-ubsan",
       "displayName": "Ninja UBSan",
       "description": "UBSan build configuration using Ninja Multi-config",
-      "inherits": "default",
+      "inherits": "base-clang",
       "binaryDir": "${sourceDir}/out/ubsan",
       "cacheVariables": {
         "CMAKE_CXX_FLAGS_INIT": "-fsanitize=undefined -Wall -Wextra -Wpedantic -Wconversion -Werror=return-type"
@@ -119,10 +119,10 @@
       }
     },
     {
-      "name": "vs22",
-      "displayName": "Visual Studio 2022",
-      "description": "Build configuration using Visual Studio 17 (2022)",
-      "generator": "Visual Studio 17 2022",
+      "name": "vs26",
+      "displayName": "Visual Studio 2026",
+      "description": "Build configuration using Visual Studio 18 (2026)",
+      "generator": "Visual Studio 18 2026",
       "binaryDir": "${sourceDir}/out/vs",
       "cacheVariables": {
         "CMAKE_CXX_FLAGS_INIT": "/WX"
@@ -131,6 +131,14 @@
         "value": "x64",
         "strategy": "external"
       }
+    },
+    {
+      "name": "vs22",
+      "displayName": "Visual Studio 2022",
+      "description": "Build configuration using Visual Studio 17 (2022)",
+      "generator": "Visual Studio 17 2022",
+      "binaryDir": "${sourceDir}/out/vs22",
+      "inherits": "vs26"
     }
   ],
   "buildPresets": [

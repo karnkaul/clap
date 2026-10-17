@@ -32,10 +32,6 @@ class Parser {
 	/// \returns Help text (that gets printed on "--help").
 	[[nodiscard]] auto get_help_text() const -> std::string;
 
-	/// \brief Whether to treat a missing command as an error.
-	/// Only relevant for Command Parsers.
-	CommandPolicy command_policy{CommandPolicy::Required};
-
   private:
 	struct Deleter {
 		void operator()(detail::Context* ptr) const noexcept;
