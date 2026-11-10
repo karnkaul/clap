@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 4.3)
 
 set(package_name clap)
-project(${package_name} VERSION "0.1.2")
+project(${package_name} VERSION "0.1.3")
 
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
