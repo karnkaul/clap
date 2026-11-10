@@ -2,7 +2,6 @@
 #include "clap/command.hpp"
 #include "clap/parameter.hpp"
 #include "clap/printer.hpp"
-#include "clap/program.hpp"
 #include "clap/spec.hpp"
 #include <cstdint>
 #include <format>
@@ -34,7 +33,9 @@ struct PrinterWrapper {
 	template <typename... Args>
 	void prefixed_err(std::format_string<Args...> fmt, Args&&... args) const {
 		auto message = std::string{program_name};
-		if (!message.empty()) { message += ": "; }
+		if (!message.empty()) {
+			message += ": ";
+		}
 		std::format_to(std::back_inserter(message), fmt, std::forward<Args>(args)...);
 		printer->printerr(message);
 	}

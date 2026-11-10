@@ -23,11 +23,19 @@ enum class Outcome : std::int8_t { Continue, EarlyExit };
 
 class Result {
   public:
-	[[nodiscard]] static constexpr auto error(ExitCode exit_code) -> Result { return Result{exit_code, Outcome::EarlyExit, {}}; }
+	[[nodiscard]] static constexpr auto error(ExitCode exit_code) -> Result {
+		return Result{exit_code, Outcome::EarlyExit, {}};
+	}
 
-	explicit constexpr Result(ExitCode const exit_code, Outcome const outcome, std::string_view const command_identifier)
-		: m_exit_code(exit_code), m_outcome(outcome), m_command_identifier(command_identifier) {
-		if (is_error()) { m_outcome = Outcome::EarlyExit; }
+	explicit constexpr Result(ExitCode const exit_code,
+							  Outcome const outcome,
+							  std::string_view const command_identifier)
+		: m_exit_code(exit_code),
+		  m_outcome(outcome),
+		  m_command_identifier(command_identifier) {
+		if (is_error()) {
+			m_outcome = Outcome::EarlyExit;
+		}
 	}
 
 	[[nodiscard]] constexpr auto exit_code() const -> ExitCode { return m_exit_code; }

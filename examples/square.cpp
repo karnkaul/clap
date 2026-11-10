@@ -23,9 +23,13 @@ namespace {
 
 	auto parser = clap::Parser{std::move(spec)};
 	auto const result = parser.parse_main(argc, argv);
-	if (result.should_early_exit()) { return result.return_code(); }
+	if (result.should_early_exit()) {
+		return result.return_code();
+	}
 
-	if (verbose) { std::print("{} x {} = ", input, input); }
+	if (verbose) {
+		std::print("{} x {} = ", input, input);
+	}
 	auto const output = input * input;
 	std::println("{}", output);
 
