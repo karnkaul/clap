@@ -33,7 +33,9 @@ class ICommand {
 
 class LargestFile : public ICommand {
 	[[nodiscard]] auto get_identifier() const -> std::string_view final { return "largest-file"; }
-	[[nodiscard]] auto get_description() const -> std::string_view final { return "print the file with the largest size"; }
+	[[nodiscard]] auto get_description() const -> std::string_view final {
+		return "print the file with the largest size";
+	}
 
 	[[nodiscard]] auto get_parameters() -> clap::ParameterList final {
 		return {
@@ -43,7 +45,9 @@ class LargestFile : public ICommand {
 	}
 
 	auto execute() -> int final {
-		if (m_paths.empty()) { return EXIT_SUCCESS; }
+		if (m_paths.empty()) {
+			return EXIT_SUCCESS;
+		}
 
 		struct File {
 			fs::path path{};
@@ -58,10 +62,14 @@ class LargestFile : public ICommand {
 				return EXIT_FAILURE;
 			}
 			files.push_back(File{.path = path, .size = std::int64_t(fs::file_size(path))});
-			if (m_verbose) { std::println("-- {} ({}B)", files.back().path.generic_string(), files.back().size); }
+			if (m_verbose) {
+				std::println("-- {} ({}B)", files.back().path.generic_string(), files.back().size);
+			}
 		}
 
-		std::ranges::sort(files, [](File const& a, File const& b) { return a.size > b.size; });
+		std::ranges::sort(files, [](File const& a, File const& b) {
+			return a.size > b.size;
+		});
 		std::println("{}", files.front().path.generic_string());
 		return EXIT_SUCCESS;
 	}
@@ -83,7 +91,9 @@ class Pow : public ICommand {
 	}
 
 	auto execute() -> int final {
-		if (m_verbose) { std::print("{}^{} = ", m_var, m_exp); }
+		if (m_verbose) {
+			std::print("{}^{} = ", m_var, m_exp);
+		}
 		auto const output = std::pow(m_var, m_exp);
 		std::println("{}", output);
 		return EXIT_SUCCESS;
@@ -111,13 +121,18 @@ class App {
 		};
 		spec.commands.reserve(m_commands.size());
 		for (auto const& command : m_commands) {
-			spec.commands.push_back(clap::command(command->get_identifier(), command->get_parameters(), command->get_description()));
+			spec.commands.push_back(
+				clap::command(command->get_identifier(), command->get_parameters(), command->get_description()));
 		}
 		auto parser = clap::Parser{std::move(spec)};
 		auto const result = parser.parse_main(argc, argv);
-		if (result.should_early_exit()) { return result.return_code(); }
+		if (result.should_early_exit()) {
+			return result.return_code();
+		}
 
-		auto const it = std::ranges::find_if(m_commands, [id = result.command_identifier()](auto const& command) { return command->get_identifier() == id; });
+		auto const it = std::ranges::find_if(m_commands, [id = result.command_identifier()](auto const& command) {
+			return command->get_identifier() == id;
+		});
 		if (it == m_commands.end()) {
 			std::println(stderr, "unrecognized command: '{}'", result.command_identifier());
 			return EXIT_FAILURE;
