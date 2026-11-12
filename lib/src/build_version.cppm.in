@@ -1,6 +1,7 @@
-#pragma once
-#include <string_view>
+export module clap.build_version;
 
-namespace clap {
+export import std;
+
+export namespace clap {
 constexpr auto build_version_v = std::string_view{"@PROJECT_VERSION@"};
 } // namespace clap

@@ -1,9 +1,4 @@
-#include "clap/build_version.hpp"
-#include "clap/parameter.hpp"
-#include "clap/parser.hpp"
-#include "clap/spec.hpp"
-#include <cstdlib>
-#include <print>
+import clap;
 
 namespace {
 [[nodiscard]] auto run(int const argc, char const* const* argv) {
@@ -33,22 +28,22 @@ namespace {
 	auto const output = input * input;
 	std::println("{}", output);
 
-	return EXIT_SUCCESS;
+	return 0;
 }
 } // namespace
 
 int main(int argc, char** argv) {
 	try {
 		if (argc < 1) {
-			std::println(stderr, "argc is < 1 ({})", argc);
-			return EXIT_FAILURE;
+			std::println(std::cerr, "argc is < 1 ({})", argc);
+			return 1;
 		}
 		return run(argc, argv);
 	} catch (std::exception const& e) {
-		std::println(stderr, "PANIC: {}", e.what());
-		return EXIT_FAILURE;
+		std::println(std::cerr, "PANIC: {}", e.what());
+		return 1;
 	} catch (...) {
 		std::println("PANIC!");
-		return EXIT_FAILURE;
+		return 1;
 	}
 }

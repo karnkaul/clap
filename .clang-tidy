@@ -14,10 +14,12 @@ Checks: 'clang-analyzer-*,
 	-modernize-use-trailing-return-type,
 	performance-*,
 	portability-*,
+  -portability-avoid-pragma-once,
 	readability-*,
 	-readability-identifier-length,
 	-readability-implicit-bool-conversion,
 	-readability-magic-numbers,
+  -readability-non-const-parameter,
 	-readability-redundant-member-init,
 	-readability-uppercase-literal-suffix'
 ...

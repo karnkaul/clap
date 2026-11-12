@@ -1,6 +1,6 @@
-#include "clap/parameter.hpp"
+import clap;
+
 #include "klib/unit_test/unit_test.hpp"
-#include <string_view>
 
 namespace {
 template <typename Type>

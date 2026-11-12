@@ -1,10 +1,6 @@
-#include "clap/exception.hpp"
-#include "clap/parameter.hpp"
-#include "clap/spec.hpp"
-#include "detail/parser_impl.hpp"
-#include "detail/types.hpp"
+import clap.detail;
+
 #include "klib/unit_test/unit_test.hpp"
-#include <string_view>
 
 namespace {
 using namespace clap;

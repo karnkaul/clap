@@ -1,15 +1,4 @@
-#include "clap/build_version.hpp"
-#include "clap/command.hpp"
-#include "clap/parameter.hpp"
-#include "clap/parser.hpp"
-#include "clap/spec.hpp"
-#include <algorithm>
-#include <cmath>
-#include <cstdlib>
-#include <filesystem>
-#include <memory>
-#include <print>
-#include <string_view>
+import clap;
 
 namespace {
 namespace fs = std::filesystem;
@@ -46,7 +35,7 @@ class LargestFile : public ICommand {
 
 	auto execute() -> int final {
 		if (m_paths.empty()) {
-			return EXIT_SUCCESS;
+			return 0;
 		}
 
 		struct File {
@@ -58,8 +47,8 @@ class LargestFile : public ICommand {
 		for (auto const in : m_paths) {
 			auto path = fs::path{in};
 			if (!fs::is_regular_file(path)) {
-				std::println(stderr, "not a file: '{}'", path.generic_string());
-				return EXIT_FAILURE;
+				std::println(std::cerr, "not a file: '{}'", path.generic_string());
+				return 1;
 			}
 			files.push_back(File{.path = path, .size = std::int64_t(fs::file_size(path))});
 			if (m_verbose) {
@@ -71,7 +60,7 @@ class LargestFile : public ICommand {
 			return a.size > b.size;
 		});
 		std::println("{}", files.front().path.generic_string());
-		return EXIT_SUCCESS;
+		return 0;
 	}
 
 	std::vector<std::string_view> m_paths{};
@@ -96,7 +85,7 @@ class Pow : public ICommand {
 		}
 		auto const output = std::pow(m_var, m_exp);
 		std::println("{}", output);
-		return EXIT_SUCCESS;
+		return 0;
 	}
 
 	int m_var{};
@@ -134,8 +123,8 @@ class App {
 			return command->get_identifier() == id;
 		});
 		if (it == m_commands.end()) {
-			std::println(stderr, "unrecognized command: '{}'", result.command_identifier());
-			return EXIT_FAILURE;
+			std::println(std::cerr, "unrecognized command: '{}'", result.command_identifier());
+			return 1;
 		}
 
 		auto const& command = *it;
@@ -150,15 +139,15 @@ class App {
 int main(int argc, char** argv) {
 	try {
 		if (argc < 1) {
-			std::println(stderr, "argc is < 1 ({})", argc);
-			return EXIT_FAILURE;
+			std::println(std::cerr, "argc is < 1 ({})", argc);
+			return 1;
 		}
 		return App{}.run(argc, argv);
 	} catch (std::exception const& e) {
-		std::println(stderr, "PANIC: {}", e.what());
-		return EXIT_FAILURE;
+		std::println(std::cerr, "PANIC: {}", e.what());
+		return 1;
 	} catch (...) {
 		std::println("PANIC!");
-		return EXIT_FAILURE;
+		return 1;
 	}
 }

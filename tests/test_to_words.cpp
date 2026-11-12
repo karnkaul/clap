@@ -1,6 +1,6 @@
-#include "clap/parser.hpp"
+import clap;
+
 #include "klib/unit_test/unit_test.hpp"
-#include <string_view>
 
 namespace {
 using namespace clap;

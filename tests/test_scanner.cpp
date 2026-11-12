@@ -1,8 +1,6 @@
-#include "detail/scanner.hpp"
+import clap.detail;
+
 #include "klib/unit_test/unit_test.hpp"
-#include <array>
-#include <span>
-#include <string_view>
 
 namespace {
 using namespace std::string_view_literals;

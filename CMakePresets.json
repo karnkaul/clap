@@ -62,7 +62,7 @@
       "inherits": "base-clang",
       "binaryDir": "${sourceDir}/out/clang",
       "cacheVariables": {
-        "CMAKE_CXX_FLAGS_INIT": "-Wall -Wextra -Wpedantic -Wconversion -Werror=return-type",
+        "CMAKE_CXX_FLAGS_INIT": "-Wall -Wextra -Wpedantic -Wconversion -Werror=return-type -Wno-reserved-module-identifier",
         "CMAKE_CXX_FLAGS_RELWITHDEBINFO_INIT": "-Werror",
         "CMAKE_CXX_FLAGS_RELEASE_INIT": "-Werror"
       }
@@ -82,7 +82,7 @@
       "name": "ninja-ubsan",
       "displayName": "Ninja UBSan",
       "description": "UBSan build configuration using Ninja Multi-config",
-      "inherits": "base-clang",
+      "inherits": "ninja-clang",
       "binaryDir": "${sourceDir}/out/ubsan",
       "cacheVariables": {
         "CMAKE_CXX_FLAGS_INIT": "-fsanitize=undefined -Wall -Wextra -Wpedantic -Wconversion -Werror=return-type"
