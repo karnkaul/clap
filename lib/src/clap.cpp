@@ -140,7 +140,9 @@ auto Parser::parse_main(int const argc, char const* const* argv, bool const skip
 	return parse_words(words);
 }
 
-auto Parser::get_help_text() const -> std::string { return detail::ParserImpl{static_cast<detail::Context&>(*m_context), {}}.help_text(); }
+auto Parser::get_help_text() const -> std::string {
+	return detail::ParserImpl{static_cast<detail::Context&>(*m_context), {}}.help_text();
+}
 } // namespace clap
 
 namespace clap {
