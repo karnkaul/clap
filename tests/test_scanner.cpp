@@ -107,7 +107,14 @@ TEST_CASE(scanner_m_string_value) {
 
 TEST_CASE(scanner_all) {
 	static constexpr auto words = std::array{
-		"-f"sv, "cmd"sv, "--flag"sv, "-fabc"sv, "-fabc=42"sv, "arg"sv, "--"sv, "-arg"sv,
+		"-f"sv,
+		"cmd"sv,
+		"--flag"sv,
+		"-fabc"sv,
+		"-fabc=42"sv,
+		"arg"sv,
+		"--"sv,
+		"-arg"sv,
 	};
 	auto scanner = Scanner{words};
 	auto token = Token{};

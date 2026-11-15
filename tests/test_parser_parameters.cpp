@@ -319,7 +319,9 @@ TEST_CASE(parser_parameter_errors) {
 			positional_required(str, "str0"),
 		};
 		get_outcome(parameters, {});
-	} catch (InvalidParameterException const& /*err*/) { thrown = true; }
+	} catch (InvalidParameterException const& /*err*/) {
+		thrown = true;
+	}
 	EXPECT(thrown);
 
 	thrown = false;
@@ -329,7 +331,9 @@ TEST_CASE(parser_parameter_errors) {
 			positional_required(i, "int1"),
 		};
 		get_outcome(parameters, {});
-	} catch (InvalidParameterException const& /*err*/) { thrown = true; }
+	} catch (InvalidParameterException const& /*err*/) {
+		thrown = true;
+	}
 	EXPECT(thrown);
 }
 } // namespace
