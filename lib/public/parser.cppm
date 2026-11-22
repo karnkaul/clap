@@ -62,6 +62,8 @@ class ParameterParser {
   private:
 	using Argument = std::variant<parameter::Positional, parameter::List>;
 
+	void clear_parameters();
+
 	void add_option(parameter::Named option);
 	auto add_positional(parameter::Positional positional) -> Result;
 	auto add_list(parameter::List list) -> Result;
@@ -90,11 +92,19 @@ class CommandParser {
   public:
 	CommandParser(IContext& context) : m_context(context) {}
 
-	auto set_commands(CommandList commands) -> Result;
+	auto set_spec(spec::Commands spec) -> Result;
 
 	auto parse(std::span<std::string_view const> args) -> Result;
 
   private:
+	using Token = ScannerToken;
+
+	void clear_spec();
+
+	auto parse_program_options() -> Result;
+	auto select_command() -> Result;
+	auto parse_command_parameters() -> Result;
+
 	struct Entry {
 		Command command;
 		ParameterParser parameter_parser;
@@ -103,6 +113,11 @@ class CommandParser {
 	IContext& m_context;
 
 	std::vector<Entry> m_entries{};
-	Result m_result{Result::create_continue()};
+	OptionList m_program_options{};
+	CommandPolicy m_policy{};
+
+	std::span<std::string_view const> m_args{};
+	Token m_command_token{};
+	Entry* m_selected_command{};
 };
 } // namespace clap

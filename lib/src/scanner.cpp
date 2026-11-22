@@ -3,7 +3,7 @@ module clap.scanner;
 import clap.types;
 
 namespace clap {
-Scanner::Scanner(std::span<std::string_view const> words) : m_remain(words) { advance(); }
+Scanner::Scanner(std::span<std::string_view const> words) : m_unscanned(words) { advance(); }
 
 auto Scanner::scan_next(Token& out) -> bool {
 	if (m_current.empty()) {
@@ -40,12 +40,14 @@ auto Scanner::scan_quoted() -> Token {
 }
 
 void Scanner::advance() {
-	if (m_remain.empty()) {
+	if (m_unscanned.empty()) {
 		m_current = {};
+		m_remain = {};
 		return;
 	}
-	m_current = m_remain.front();
-	m_remain = m_remain.subspan(1);
+	m_current = m_unscanned.front();
+	m_remain = m_unscanned;
+	m_unscanned = m_unscanned.subspan(1);
 }
 
 auto Scanner::to_token(Token::Type const type, std::size_t length) -> Token {

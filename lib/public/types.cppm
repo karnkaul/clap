@@ -14,7 +14,8 @@ enum class ExitCode : std::int8_t {
 	OptionRequiresArgument = 15,
 	MissingRequiredArgument = 16,
 	MissingRequiredCommand = 17,
-	UnexpectedToken = 18,
+	UnrecognizedCommand = 18,
+	UnexpectedToken = 19,
 
 	InternalError = 20,
 };

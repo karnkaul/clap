@@ -33,6 +33,22 @@ TEST_CASE(scanner_strings) {
 	EXPECT(token.type == Token::Type::Eof);
 }
 
+TEST_CASE(scanner_get_remain) {
+	static constexpr auto words = std::array{"first"sv, "second"sv};
+	auto scanner = Scanner{words};
+	auto token = Token{};
+
+	EXPECT(scanner.get_remain().size() == 2);
+	EXPECT(scanner.scan_next(token));
+	EXPECT(token.lexeme == "first");
+	EXPECT(scanner.get_remain().size() == 1);
+	EXPECT(scanner.get_remain().front() == "second");
+
+	EXPECT(scanner.scan_next(token));
+	EXPECT(token.lexeme == "second");
+	EXPECT(scanner.get_remain().empty());
+}
+
 TEST_CASE(scanner_mm_string) {
 	static constexpr auto words = std::array{
 		"--foo"sv,

@@ -183,11 +183,7 @@ auto OptionParser::find_named(T const t) const -> parameter::Named const* {
 
 namespace clap {
 auto ParameterParser::set_parameters(ParameterList parameters) -> Result {
-	m_options.clear();
-	m_list.reset();
-	m_pre_list.clear();
-	m_post_list.clear();
-	m_optional_positionals = false;
+	clear_parameters();
 
 	auto const visitor = Visitor{
 		[this](parameter::Named named) {
@@ -204,9 +200,11 @@ auto ParameterParser::set_parameters(ParameterList parameters) -> Result {
 	for (auto& parameter : parameters) {
 		auto const result = std::visit(visitor, std::move(parameter));
 		if (result.should_early_exit()) {
-			break;
+			clear_parameters();
+			return result;
 		}
 	}
+
 	return Result::create_continue();
 }
 
@@ -245,6 +243,14 @@ auto ParameterParser::parse(std::span<std::string_view const> args) -> Result {
 	}
 
 	return parse_arguments();
+}
+
+void ParameterParser::clear_parameters() {
+	m_options.clear();
+	m_list.reset();
+	m_pre_list.clear();
+	m_post_list.clear();
+	m_optional_positionals = false;
 }
 
 void ParameterParser::add_option(parameter::Named option) { m_options.push_back(std::move(option)); }
@@ -372,27 +378,127 @@ auto ParameterParser::parse_positional(parameter::Positional const& positional, 
 #pragma region CommandParser
 
 namespace clap {
-auto CommandParser::set_commands(CommandList commands) -> Result {
-	m_entries.clear();
+auto CommandParser::set_spec(spec::Commands spec) -> Result {
+	clear_spec();
 
-	for (auto& command : commands) {
+	for (auto& command : spec.commands) {
 		auto entry = Entry{
 			.command = std::move(command),
 			.parameter_parser = ParameterParser{m_context},
 		};
 
-		auto const result = entry.parameter_parser.set_parameters(command.parameters);
+		auto const result = entry.parameter_parser.set_parameters(std::move(entry.command.parameters));
 		if (result.should_early_exit()) {
+			clear_spec();
 			return result;
 		}
+
+		m_entries.push_back(std::move(entry));
 	}
+
+	m_program_options = std::move(spec.options);
+	m_policy = spec.policy;
 
 	return Result::create_continue();
 }
 
 auto CommandParser::parse(std::span<std::string_view const> args) -> Result {
-	//
+	m_args = {args.begin(), args.end()};
+	m_command_token = {};
+	m_selected_command = {};
+
+	auto result = parse_program_options();
+	if (result.should_early_exit()) {
+		return result;
+	}
+
+	if (m_command_token.lexeme.empty()) {
+		return Result::create_continue();
+	}
+
+	result = select_command();
+	if (result.should_early_exit()) {
+		return result;
+	}
+
+	result = parse_command_parameters();
+	if (result.should_early_exit()) {
+		return result;
+	}
+
+	if (!m_selected_command) {
+		return Result::create_continue();
+	}
+	return Result{ExitCode::Success, Outcome::Continue, m_selected_command->command.identifier};
+}
+
+void CommandParser::clear_spec() {
+	m_entries.clear();
+	m_program_options.clear();
+	m_policy = CommandPolicy::Required;
+	m_args = {};
+	m_command_token = {};
+	m_selected_command = {};
+}
+
+auto CommandParser::parse_program_options() -> Result {
+	auto option_parser = OptionParser{m_context, m_program_options};
+	auto scanner = Scanner{m_args};
+	auto token = Token{};
+	while (scanner.scan_next(token)) {
+		auto const action = option_parser.parse_next(token);
+
+		if (auto const* result = std::get_if<Result>(&action); result && result->should_early_exit()) {
+			return *result;
+		}
+
+		if (std::get<OptionParser::Iterate>(action) == OptionParser::Iterate::Pass) {
+			m_command_token = token;
+			break;
+		}
+	}
+
+	if (auto const result = option_parser.finish(); result.should_early_exit()) {
+		return result;
+	}
+
+	if (m_command_token.lexeme.empty() && m_policy == CommandPolicy::Required) {
+		m_context.print_error("missing required command");
+		return Result::create_early_exit(ExitCode::MissingRequiredCommand);
+	}
+
+	m_args = scanner.get_remain();
 	return Result::create_continue();
+}
+
+auto CommandParser::select_command() -> Result {
+	auto const pred = [this](Entry const& entry) {
+		return entry.command.identifier == m_command_token.lexeme;
+	};
+	auto const it = std::ranges::find_if(m_entries, pred);
+	if (it == m_entries.end()) {
+		m_context.print_error(std::format("unrecognized command: {}", m_command_token.lexeme));
+		return Result::create_early_exit(ExitCode::UnrecognizedCommand);
+	}
+
+	m_selected_command = &*it;
+	return Result::create_continue();
+}
+
+auto CommandParser::parse_command_parameters() -> Result {
+	if (!m_selected_command) { // CommandPolicy is Optional.
+		if (!m_args.empty()) {
+			m_context.print_error(std::format("unknown argument: {}", m_args.front()));
+			return Result::create_early_exit(ExitCode::UnknownArgument);
+		}
+
+		return Result::create_continue();
+	}
+
+	// TODO: context:
+	// - has_version() should return false
+	// - should print selected command's help text
+	return m_selected_command->parameter_parser.parse(m_args);
 }
 } // namespace clap
 
