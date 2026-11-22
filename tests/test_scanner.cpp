@@ -1,11 +1,13 @@
-import clap.detail;
+import clap.scanner;
 
 #include "klib/unit_test/unit_test.hpp"
 
 namespace {
 using namespace std::string_view_literals;
 
-using namespace clap::detail;
+using namespace clap;
+
+using Token = ScannerToken;
 
 TEST_CASE(scanner_empty) {
 	auto scanner = Scanner{{}};
