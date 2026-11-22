@@ -4,7 +4,7 @@ module;
 
 module clap.parser;
 
-#pragma region printer
+#pragma region Context
 
 namespace clap {
 void ErrorPrinter::print_error(std::string_view const message) const {
@@ -22,6 +22,31 @@ void ErrorPrinter::print_error(std::string_view const message) const {
 
 	text.append(message);
 	printer->printerr(text);
+}
+
+ProgramContext::ProgramContext(Program const& program, IPrinter* custom_printer)
+	: m_error_printer{.printer = &or_default(custom_printer), .program_name = program.name},
+	  m_version(program.version),
+	  m_description(program.description),
+	  m_printer(m_error_printer.printer) {}
+
+void ProgramContext::print_help_text() {
+	// TODO
+}
+
+auto ProgramContext::has_version() const -> bool { return !m_version.empty(); }
+
+void ProgramContext::print_version() {
+	if (m_version.empty()) {
+		return;
+	}
+
+	m_printer->println(m_version);
+}
+
+void ProgramContext::set_command_identifier(std::string_view const identifier) {
+	m_command_identifier = identifier;
+	m_version = {};
 }
 } // namespace clap
 
@@ -542,4 +567,33 @@ auto ProgramParser::parse_command_parameters(Scanner& scanner) -> Result {
 }
 } // namespace clap
 
+#pragma endregion
+
+#pragma region Parser
+
+namespace clap {
+Parser::Parser(spec::Parameters parameters) : m_context(parameters.program, parameters.custom_printer) {
+	auto const result = m_environment.build(
+		m_context.get_error_printer(), parameters.program, std::move(parameters.parameters), {}, {});
+	if (result != ExitCode::Success) {
+		// TODO
+	}
+}
+
+Parser::Parser(spec::Commands commands) : m_context(commands.program, commands.custom_printer) {
+	auto const result = m_environment.build(m_context.get_error_printer(),
+											commands.program,
+											std::move(commands.options),
+											std::move(commands.commands),
+											commands.policy);
+	if (result != ExitCode::Success) {
+		// TODO
+	}
+}
+
+auto Parser::parse_args(std::span<std::string_view const> args) -> Result {
+	auto program_parser = ProgramParser{m_context, m_environment};
+	return program_parser.parse(args);
+}
+} // namespace clap
 #pragma endregion

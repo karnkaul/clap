@@ -98,7 +98,6 @@ struct Program {
 	std::string_view name{};
 	std::string_view version{};
 	std::string_view description{};
-	IPrinter* custom_printer{};
 };
 
 /// \returns Filename stem, assuming argv_0 is a path to the executable.

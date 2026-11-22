@@ -22,6 +22,29 @@ class ErrorPrinter {
 	std::string_view command_identifier{};
 };
 
+class ProgramContext : public IContext {
+  public:
+	explicit ProgramContext(Program const& program, IPrinter* custom_printer);
+
+	void print_help_text() override;
+	[[nodiscard]] auto has_version() const -> bool override;
+	void print_version() override;
+
+	void print_error(std::string_view message) override { get_error_printer().print_error(message); }
+
+	[[nodiscard]] auto get_error_printer() const -> ErrorPrinter const& { return m_error_printer; }
+
+	void set_command_identifier(std::string_view identifier);
+
+  private:
+	ErrorPrinter m_error_printer{};
+	std::string_view m_version{};
+	std::string_view m_description{};
+	IPrinter* m_printer{};
+
+	std::string_view m_command_identifier{};
+};
+
 class OptionParser {
   public:
 	using Token = ScannerToken;
@@ -142,5 +165,17 @@ class ProgramParser {
 
 	Token m_command_token{};
 	CommandEnvironment const* m_selected_command{};
+};
+
+class Parser {
+  public:
+	explicit Parser(spec::Parameters parameters);
+	explicit Parser(spec::Commands commands);
+
+	[[nodiscard]] auto parse_args(std::span<std::string_view const> args) -> Result;
+
+  private:
+	ProgramContext m_context;
+	ProgramEnvironment m_environment;
 };
 } // namespace clap
