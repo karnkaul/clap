@@ -6,8 +6,6 @@ export import clap.scanner;
 export namespace clap {
 class IContext : public Polymorphic {
   public:
-	[[nodiscard]] virtual auto get_named_parameters() const -> std::span<parameter::Named const> = 0;
-
 	virtual void print_help_text() = 0;
 	[[nodiscard]] virtual auto has_version() const -> bool = 0;
 	virtual void print_version() = 0;
@@ -19,7 +17,7 @@ class OptionParser {
   public:
 	using Token = ScannerToken;
 
-	enum class Iterate : std::int8_t { Consume, Pass, EarlyExit };
+	enum class Iterate : std::int8_t { Consume, Pass };
 
 	using Action = std::variant<Iterate, Result>;
 
@@ -51,5 +49,60 @@ class OptionParser {
 	bool m_force_ended{};
 	parameter::Named const* m_expects_value{};
 	std::string_view m_option_lexeme{};
+};
+
+class ParameterParser {
+  public:
+	explicit ParameterParser(IContext& context) : m_context(context) {}
+
+	auto set_parameters(ParameterList parameters) -> Result;
+
+	auto parse(std::span<std::string_view const> args) -> Result;
+
+  private:
+	using Argument = std::variant<parameter::Positional, parameter::List>;
+
+	void add_option(parameter::Named option);
+	auto add_positional(parameter::Positional positional) -> Result;
+	auto add_list(parameter::List list) -> Result;
+
+	auto parse_arguments() -> Result;
+	auto parse_front_to_list() -> Result;
+	auto parse_back_to_list() -> Result;
+	auto parse_list() -> Result;
+
+	auto check_required(parameter::Positional const& positional) -> Result;
+	auto parse_positional(parameter::Positional const& positional, std::string_view value) -> Result;
+
+	IContext& m_context;
+
+	std::vector<parameter::Named> m_options{};
+	std::vector<parameter::Positional> m_pre_list{};
+	std::optional<parameter::List> m_list{};
+	std::vector<parameter::Positional> m_post_list{};
+	bool m_optional_positionals{};
+
+	std::vector<ScannerToken> m_argument_tokens{};
+	std::span<ScannerToken const> m_arguments{};
+};
+
+class CommandParser {
+  public:
+	CommandParser(IContext& context) : m_context(context) {}
+
+	auto set_commands(CommandList commands) -> Result;
+
+	auto parse(std::span<std::string_view const> args) -> Result;
+
+  private:
+	struct Entry {
+		Command command;
+		ParameterParser parameter_parser;
+	};
+
+	IContext& m_context;
+
+	std::vector<Entry> m_entries{};
+	Result m_result{Result::create_continue()};
 };
 } // namespace clap

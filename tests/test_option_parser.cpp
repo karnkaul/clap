@@ -1,41 +1,11 @@
 import clap.parser;
 import clap.scanner;
 
+#include "common.hpp"
 #include "klib/unit_test/unit_test.hpp"
 
+namespace clap::test {
 namespace {
-using namespace clap;
-
-[[nodiscard]] auto to_tokens(std::string_view const input) {
-	auto const words = to_words(input);
-	auto ret = std::vector<ScannerToken>{};
-	ret.reserve(words.size());
-	auto scanner = Scanner{words};
-	auto token = ScannerToken{};
-	while (scanner.scan_next(token)) {
-		ret.push_back(token);
-	}
-	return ret;
-}
-
-class MockContext : public IContext {
-  public:
-	[[nodiscard]] auto get_named_parameters() const -> std::span<parameter::Named const> final { return m_named; }
-
-	void print_help_text() final { m_help_printed = true; }
-	[[nodiscard]] auto has_version() const -> bool final { return m_has_version; }
-	void print_version() final { m_version_printed = true; }
-
-	void print_error([[maybe_unused]] std::string_view message) final {}
-
-	std::vector<parameter::Named> m_named{};
-
-	bool m_help_printed{};
-	bool m_has_version{};
-	bool m_version_printed{};
-	std::string m_error{};
-};
-
 class Fixture {
   public:
 	explicit Fixture(OptionList options) : options(std::move(options)), parser(context, this->options) {}
@@ -101,12 +71,12 @@ TEST_CASE(option_parser_one_flag) {
 TEST_CASE(option_parser_multiple_named) {
 	auto flag = bool{};
 	auto str = std::string_view{};
-	auto s32 = int{};
+	auto i32 = int{};
 	auto fixture = Fixture{
 		OptionList{
 			named_flag(flag, "f,flag"),
 			named_option(str, "s,str"),
-			named_option(s32, "i"),
+			named_option(i32, "i"),
 		},
 	};
 
@@ -140,7 +110,7 @@ TEST_CASE(option_parser_multiple_named) {
 		case 3: {
 			ASSERT(std::holds_alternative<OptionParser::Iterate>(action));
 			EXPECT(std::get<OptionParser::Iterate>(action) == OptionParser::Iterate::Consume);
-			EXPECT(s32 == 42);
+			EXPECT(i32 == 42);
 			break;
 		}
 		}
@@ -177,11 +147,11 @@ TEST_CASE(option_parser_terminate_options) {
 
 TEST_CASE(option_parser_missing_value) {
 	auto flag = bool{};
-	auto s32 = int{};
+	auto i32 = int{};
 	auto fixture = Fixture{
 		OptionList{
 			named_flag(flag, "f,flag"),
-			named_option(s32, "i"),
+			named_option(i32, "i"),
 		},
 	};
 
@@ -194,3 +164,4 @@ TEST_CASE(option_parser_missing_value) {
 	EXPECT(fixture.parser.finish().exit_code() == ExitCode::OptionRequiresArgument);
 }
 } // namespace
+} // namespace clap::test

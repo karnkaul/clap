@@ -7,7 +7,7 @@ enum class ExitCode : std::int8_t {
 	Success = 0,
 	Failure = 1,
 
-	InvalidParser = 11,
+	InvalidParameter = 11,
 	UnknownArgument = 12,
 	InvalidArgument = 13,
 	UnrecognizedOption = 14,
@@ -22,6 +22,11 @@ enum class ExitCode : std::int8_t {
 enum class Outcome : std::int8_t { Continue, EarlyExit };
 
 enum class CommandPolicy : std::int8_t { Required, Optional };
+
+template <typename... Ts>
+struct Visitor : Ts... {
+	using Ts::operator()...;
+};
 
 class Result {
   public:

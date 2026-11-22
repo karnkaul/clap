@@ -1,4 +1,10 @@
+module;
+
+#include <cassert>
+
 module clap.parser;
+
+#pragma region OptionParser
 
 namespace clap {
 namespace {
@@ -16,15 +22,6 @@ struct ArgSplit {
 	std::string_view left{};
 	std::string_view right{};
 };
-
-// void prefixed_err(IPrinter& printer, std::string_view const program_name, std::string_view const msg) {
-// 	auto message = std::string{program_name};
-// 	if (!message.empty()) {
-// 		message += ": ";
-// 	}
-// 	std::format_to(std::back_inserter(message), "{}", msg);
-// 	printer.printerr(message);
-// }
 
 [[nodiscard]] auto or_iterate(Result const result, OptionParser::Iterate const it) -> OptionParser::Action {
 	if (result.should_early_exit()) {
@@ -63,7 +60,7 @@ auto OptionParser::parse_next(Token const& token) -> Action {
 	default: break;
 	}
 
-	m_context.print_error(std::format("InternalError: unexpected Token: {}", token.lexeme));
+	m_context.print_error(std::format("InternalError: unexpected Token: '{}'", token.lexeme));
 	return Result::create_early_exit(ExitCode::InternalError);
 }
 
@@ -179,3 +176,224 @@ auto OptionParser::find_named(T const t) const -> parameter::Named const* {
 	return nullptr;
 }
 } // namespace clap
+
+#pragma endregion
+
+#pragma region ParameterParser
+
+namespace clap {
+auto ParameterParser::set_parameters(ParameterList parameters) -> Result {
+	m_options.clear();
+	m_list.reset();
+	m_pre_list.clear();
+	m_post_list.clear();
+	m_optional_positionals = false;
+
+	auto const visitor = Visitor{
+		[this](parameter::Named named) {
+			add_option(std::move(named));
+			return Result::create_continue();
+		},
+		[this](parameter::Positional positional) {
+			return add_positional(std::move(positional));
+		},
+		[this](parameter::List list) {
+			return add_list(std::move(list));
+		},
+	};
+	for (auto& parameter : parameters) {
+		auto const result = std::visit(visitor, std::move(parameter));
+		if (result.should_early_exit()) {
+			break;
+		}
+	}
+	return Result::create_continue();
+}
+
+auto ParameterParser::parse(std::span<std::string_view const> args) -> Result {
+	m_argument_tokens.clear();
+	m_arguments = {};
+
+	auto option_parser = OptionParser{m_context, m_options};
+	auto scanner = Scanner{args};
+	auto token = ScannerToken{};
+
+	auto result = Result::create_continue();
+	while (scanner.scan_next(token)) {
+		auto action = option_parser.parse_next(token);
+
+		auto const visitor = Visitor{
+			[&](OptionParser::Iterate const it) {
+				if (it == OptionParser::Iterate::Pass) {
+					m_argument_tokens.push_back(token);
+				}
+			},
+			[&](Result const in) {
+				result = in;
+			},
+		};
+		std::visit(visitor, action);
+
+		if (result.should_early_exit()) {
+			return result;
+		}
+	}
+
+	result = option_parser.finish();
+	if (result.should_early_exit()) {
+		return result;
+	}
+
+	return parse_arguments();
+}
+
+void ParameterParser::add_option(parameter::Named option) { m_options.push_back(std::move(option)); }
+
+auto ParameterParser::add_positional(parameter::Positional positional) -> Result {
+	if (m_optional_positionals && positional.type == parameter::Type::Required) {
+		m_context.print_error(std::format("required positional after optional(s): '{}'", positional.name));
+		return Result::create_early_exit(ExitCode::InvalidParameter);
+	}
+
+	auto& target = m_list ? m_post_list : m_pre_list;
+	target.push_back(std::move(positional));
+	if (positional.type == parameter::Type::Optional) {
+		m_optional_positionals = true;
+	}
+
+	return Result::create_continue();
+}
+
+auto ParameterParser::add_list(parameter::List list) -> Result {
+	if (m_list) {
+		m_context.print_error(std::format("only one list parameter is permitted: '{}'", list.name));
+		return Result::create_early_exit(ExitCode::InvalidParameter);
+	}
+
+	m_list.emplace(std::move(list));
+	return Result::create_continue();
+}
+
+auto ParameterParser::parse_arguments() -> Result {
+	m_arguments = m_argument_tokens;
+	auto result = parse_front_to_list();
+	if (result.should_early_exit()) {
+		return result;
+	}
+	result = parse_back_to_list();
+	if (result.should_early_exit()) {
+		return result;
+	}
+	result = parse_list();
+	if (result.should_early_exit()) {
+		return result;
+	}
+
+	if (m_arguments.empty()) {
+		return Result::create_continue();
+	}
+
+	m_context.print_error(std::format("unknown argument: '{}'", m_arguments.front().lexeme));
+	return Result::create_early_exit(ExitCode::UnknownArgument);
+}
+
+auto ParameterParser::parse_front_to_list() -> Result {
+	for (auto const& positional : m_pre_list) {
+		if (m_arguments.empty()) {
+			return check_required(positional);
+		}
+
+		auto const argument = m_arguments.front();
+		m_arguments = m_arguments.subspan(1);
+		if (!parse_positional(positional, argument.lexeme)) {
+			return Result::create_early_exit(ExitCode::InvalidArgument);
+		}
+	}
+
+	return Result::create_continue();
+}
+
+auto ParameterParser::parse_back_to_list() -> Result {
+	for (auto const& positional : std::views::reverse(m_post_list)) {
+		if (m_arguments.empty()) {
+			return check_required(positional);
+		}
+
+		auto const argument = m_arguments.back();
+		m_arguments = m_arguments.subspan(0, m_arguments.size() - 1);
+		if (!parse_positional(positional, argument.lexeme)) {
+			return Result::create_early_exit(ExitCode::InvalidArgument);
+		}
+	}
+
+	return Result::create_continue();
+}
+
+auto ParameterParser::parse_list() -> Result {
+	if (m_list) {
+		while (!m_arguments.empty()) {
+			auto const token = m_arguments.front();
+			m_arguments = m_arguments.subspan(1);
+
+			if (m_list->parse(token.lexeme)) {
+				continue;
+			}
+
+			m_context.print_error(std::format("invalid {}: '{}'", m_list->name, token.lexeme));
+			return Result::create_early_exit(ExitCode::InvalidArgument);
+		}
+	}
+
+	return Result::create_continue();
+}
+
+auto ParameterParser::check_required(parameter::Positional const& positional) -> Result {
+	if (positional.type != parameter::Type::Required) {
+		return Result::create_continue();
+	}
+
+	m_context.print_error(std::format("missing required argument: '{}'", positional.name));
+	return Result::create_early_exit(ExitCode::MissingRequiredArgument);
+}
+
+auto ParameterParser::parse_positional(parameter::Positional const& positional, std::string_view const value)
+	-> Result {
+	if (positional.parse(value)) {
+		return Result::create_continue();
+	}
+
+	m_context.print_error(std::format("invalid {}: '{}'", positional.name, value));
+	return Result::create_early_exit(ExitCode::InvalidArgument);
+}
+} // namespace clap
+
+#pragma endregion
+
+#pragma region CommandParser
+
+namespace clap {
+auto CommandParser::set_commands(CommandList commands) -> Result {
+	m_entries.clear();
+
+	for (auto& command : commands) {
+		auto entry = Entry{
+			.command = std::move(command),
+			.parameter_parser = ParameterParser{m_context},
+		};
+
+		auto const result = entry.parameter_parser.set_parameters(command.parameters);
+		if (result.should_early_exit()) {
+			return result;
+		}
+	}
+
+	return Result::create_continue();
+}
+
+auto CommandParser::parse(std::span<std::string_view const> args) -> Result {
+	//
+	return Result::create_continue();
+}
+} // namespace clap
+
+#pragma endregion
