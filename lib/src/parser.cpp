@@ -179,28 +179,49 @@ auto OptionParser::find_named(T const t) const -> parameter::Named const* {
 
 #pragma endregion
 
-#pragma region ParameterParser
+#pragma region environment
 
 namespace clap {
-auto ParameterParser::set_parameters(ParameterList parameters) -> Result {
-	clear_parameters();
+auto ParameterEnvironment::build(IContext& context, ParameterList parameters) -> Result {
+	options.clear();
+	arguments.pre_list.clear();
+	arguments.list.reset();
+	arguments.post_list.clear();
 
+	auto optional_positionals = false;
 	auto const visitor = Visitor{
-		[this](parameter::Named named) {
-			add_option(std::move(named));
+		[&](parameter::Named named) {
+			options.push_back(std::move(named));
 			return Result::create_continue();
 		},
-		[this](parameter::Positional positional) {
-			return add_positional(std::move(positional));
+		[&](parameter::Positional positional) {
+			if (optional_positionals && positional.type == parameter::Type::Required) {
+				context.print_error(std::format("required positional after optional(s): '{}'", positional.name));
+				return Result::create_early_exit(ExitCode::InvalidParameter);
+			}
+
+			auto& target = arguments.list ? arguments.post_list : arguments.pre_list;
+			target.push_back(std::move(positional));
+			if (positional.type == parameter::Type::Optional) {
+				optional_positionals = true;
+			}
+
+			return Result::create_continue();
 		},
-		[this](parameter::List list) {
-			return add_list(std::move(list));
+		[&](parameter::List list) {
+			if (arguments.list) {
+				context.print_error(std::format("only one list parameter is permitted: '{}'", list.name));
+				return Result::create_early_exit(ExitCode::InvalidParameter);
+			}
+
+			arguments.list.emplace(std::move(list));
+			return Result::create_continue();
 		},
 	};
+
 	for (auto& parameter : parameters) {
 		auto const result = std::visit(visitor, std::move(parameter));
 		if (result.should_early_exit()) {
-			clear_parameters();
 			return result;
 		}
 	}
@@ -208,20 +229,81 @@ auto ParameterParser::set_parameters(ParameterList parameters) -> Result {
 	return Result::create_continue();
 }
 
+auto CommandEnvironment::build(IContext& context, Command command) -> Result {
+	identifier = command.identifier;
+	description = command.description;
+	epilogue = command.epilogue;
+	return parameter_environment.build(context, std::move(command.parameters));
+}
+
+auto ProgramEnvironment::build(IContext& context, Program const& program, ParameterList parameters) -> Result {
+	program_name = program.name;
+	version = program.version;
+	description = program.description;
+	commands.clear();
+	return this->parameters.build(context, std::move(parameters));
+}
+
+auto ProgramEnvironment::build(IContext& context,
+							   Program const& program,
+							   std::variant<ParameterList, OptionList> program_parameters,
+							   CommandList commands,
+							   CommandPolicy const command_policy) -> Result {
+	program_name = program.name;
+	version = program.version;
+	description = program.description;
+	this->command_policy = command_policy;
+
+	auto const visitor = Visitor{
+		[&](ParameterList parameter_list) {
+			return parameters.build(context, std::move(parameter_list));
+		},
+		[&](OptionList option_list) {
+			parameters.options = std::move(option_list);
+			return Result::create_continue();
+		},
+	};
+
+	auto const result = std::visit(visitor, std::move(program_parameters));
+	if (result.should_early_exit()) {
+		return result;
+	}
+
+	this->commands.clear();
+	for (auto& command : commands) {
+		auto& environment = this->commands.emplace_back();
+		auto const result = environment.build(context, std::move(command));
+		if (result.should_early_exit()) {
+			return result;
+		}
+	}
+	return Result::create_continue();
+}
+} // namespace clap
+
+#pragma endregion
+
+#pragma region ParameterParser
+
+namespace clap {
+ParameterParser::ParameterParser(IContext& context, ParameterEnvironment const& environment)
+	: m_context(context),
+	  m_environment(environment) {}
+
 auto ParameterParser::parse(Scanner& scanner) -> Result {
 	m_argument_tokens.clear();
 	m_arguments = {};
 
-	auto option_parser = OptionParser{m_context, m_options};
-	auto token = ScannerToken{};
+	auto option_parser = OptionParser{m_context, m_environment.options};
+	auto token = Token{};
 
 	auto result = Result::create_continue();
 	while (scanner.scan_next(token)) {
 		auto action = option_parser.parse_next(token);
 
 		auto const visitor = Visitor{
-			[&](OptionParser::Iterate const it) {
-				if (it == OptionParser::Iterate::Pass) {
+			[&](Iterate const it) {
+				if (it == Iterate::Pass) {
 					m_argument_tokens.push_back(token);
 				}
 			},
@@ -242,41 +324,6 @@ auto ParameterParser::parse(Scanner& scanner) -> Result {
 	}
 
 	return parse_arguments();
-}
-
-void ParameterParser::clear_parameters() {
-	m_options.clear();
-	m_list.reset();
-	m_pre_list.clear();
-	m_post_list.clear();
-	m_optional_positionals = false;
-}
-
-void ParameterParser::add_option(parameter::Named option) { m_options.push_back(std::move(option)); }
-
-auto ParameterParser::add_positional(parameter::Positional positional) -> Result {
-	if (m_optional_positionals && positional.type == parameter::Type::Required) {
-		m_context.print_error(std::format("required positional after optional(s): '{}'", positional.name));
-		return Result::create_early_exit(ExitCode::InvalidParameter);
-	}
-
-	auto& target = m_list ? m_post_list : m_pre_list;
-	target.push_back(std::move(positional));
-	if (positional.type == parameter::Type::Optional) {
-		m_optional_positionals = true;
-	}
-
-	return Result::create_continue();
-}
-
-auto ParameterParser::add_list(parameter::List list) -> Result {
-	if (m_list) {
-		m_context.print_error(std::format("only one list parameter is permitted: '{}'", list.name));
-		return Result::create_early_exit(ExitCode::InvalidParameter);
-	}
-
-	m_list.emplace(std::move(list));
-	return Result::create_continue();
 }
 
 auto ParameterParser::parse_arguments() -> Result {
@@ -303,7 +350,7 @@ auto ParameterParser::parse_arguments() -> Result {
 }
 
 auto ParameterParser::parse_front_to_list() -> Result {
-	for (auto const& positional : m_pre_list) {
+	for (auto const& positional : m_environment.arguments.pre_list) {
 		if (m_arguments.empty()) {
 			return check_required(positional);
 		}
@@ -319,7 +366,7 @@ auto ParameterParser::parse_front_to_list() -> Result {
 }
 
 auto ParameterParser::parse_back_to_list() -> Result {
-	for (auto const& positional : std::views::reverse(m_post_list)) {
+	for (auto const& positional : std::views::reverse(m_environment.arguments.post_list)) {
 		if (m_arguments.empty()) {
 			return check_required(positional);
 		}
@@ -335,16 +382,16 @@ auto ParameterParser::parse_back_to_list() -> Result {
 }
 
 auto ParameterParser::parse_list() -> Result {
-	if (m_list) {
+	if (m_environment.arguments.list) {
 		while (!m_arguments.empty()) {
 			auto const token = m_arguments.front();
 			m_arguments = m_arguments.subspan(1);
 
-			if (m_list->parse(token.lexeme)) {
+			if (m_environment.arguments.list->parse(token.lexeme)) {
 				continue;
 			}
 
-			m_context.print_error(std::format("invalid {}: '{}'", m_list->name, token.lexeme));
+			m_context.print_error(std::format("invalid {}: '{}'", m_environment.arguments.list->name, token.lexeme));
 			return Result::create_early_exit(ExitCode::InvalidArgument);
 		}
 	}
@@ -374,37 +421,27 @@ auto ParameterParser::parse_positional(parameter::Positional const& positional, 
 
 #pragma endregion
 
-#pragma region CommandParser
+#pragma region ProgramParser
 
 namespace clap {
-CommandParser::CommandParser(IContext& context) : m_context(context) {}
+ProgramParser::ProgramParser(IContext& context, ProgramEnvironment const& environment)
+	: m_context(context),
+	  m_environment(environment) {}
 
-auto CommandParser::set_parameters(OptionList program_options, CommandList commands, CommandPolicy const policy)
-	-> Result {
-	clear_parameters();
-
-	for (auto& command : commands) {
-		auto entry = Entry{
-			.command = std::move(command),
-			.parameter_parser = ParameterParser{m_context},
-		};
-
-		auto const result = entry.parameter_parser.set_parameters(std::move(entry.command.parameters));
-		if (result.should_early_exit()) {
-			clear_parameters();
-			return result;
-		}
-
-		m_entries.push_back(std::move(entry));
+auto ProgramParser::parse(std::span<std::string_view const> args) -> Result {
+	auto scanner = Scanner{args};
+	if (m_environment.commands.empty()) {
+		return parse_parameters(scanner);
 	}
-
-	m_program_options = std::move(program_options);
-	m_policy = policy;
-
-	return Result::create_continue();
+	return parse_commands(scanner);
 }
 
-auto CommandParser::parse(Scanner& scanner) -> Result {
+auto ProgramParser::parse_parameters(Scanner& scanner) -> Result {
+	auto parameter_parser = ParameterParser{m_context, m_environment.parameters};
+	return parameter_parser.parse(scanner);
+}
+
+auto ProgramParser::parse_commands(Scanner& scanner) -> Result {
 	m_command_token = {};
 	m_selected_command = {};
 
@@ -430,18 +467,11 @@ auto CommandParser::parse(Scanner& scanner) -> Result {
 	if (!m_selected_command) {
 		return Result::create_continue();
 	}
-	return Result{ExitCode::Success, Outcome::Continue, m_selected_command->command.identifier};
+	return Result{ExitCode::Success, Outcome::Continue, m_selected_command->identifier};
 }
 
-void CommandParser::clear_parameters() {
-	m_entries.clear();
-	m_program_options.clear();
-	m_command_token = {};
-	m_selected_command = {};
-}
-
-auto CommandParser::parse_program_options(Scanner& scanner) -> Result {
-	auto option_parser = OptionParser{m_context, m_program_options};
+auto ProgramParser::parse_program_options(Scanner& scanner) -> Result {
+	auto option_parser = OptionParser{m_context, m_environment.parameters.options};
 	auto token = Token{};
 	while (scanner.scan_next(token)) {
 		auto const action = option_parser.parse_next(token);
@@ -450,7 +480,7 @@ auto CommandParser::parse_program_options(Scanner& scanner) -> Result {
 			return *result;
 		}
 
-		if (std::get<OptionParser::Iterate>(action) == OptionParser::Iterate::Pass) {
+		if (std::get<Iterate>(action) == Iterate::Pass) {
 			m_command_token = token;
 			break;
 		}
@@ -460,7 +490,7 @@ auto CommandParser::parse_program_options(Scanner& scanner) -> Result {
 		return result;
 	}
 
-	if (m_command_token.lexeme.empty() && m_policy == CommandPolicy::Required) {
+	if (m_command_token.lexeme.empty() && m_environment.command_policy == CommandPolicy::Required) {
 		m_context.print_error("missing required command");
 		return Result::create_early_exit(ExitCode::MissingRequiredCommand);
 	}
@@ -468,12 +498,12 @@ auto CommandParser::parse_program_options(Scanner& scanner) -> Result {
 	return Result::create_continue();
 }
 
-auto CommandParser::select_command() -> Result {
-	auto const pred = [this](Entry const& entry) {
-		return entry.command.identifier == m_command_token.lexeme;
+auto ProgramParser::select_command() -> Result {
+	auto const pred = [this](CommandEnvironment const& entry) {
+		return entry.identifier == m_command_token.lexeme;
 	};
-	auto const it = std::ranges::find_if(m_entries, pred);
-	if (it == m_entries.end()) {
+	auto const it = std::ranges::find_if(m_environment.commands, pred);
+	if (it == m_environment.commands.end()) {
 		m_context.print_error(std::format("unrecognized command: {}", m_command_token.lexeme));
 		return Result::create_early_exit(ExitCode::UnrecognizedCommand);
 	}
@@ -482,15 +512,17 @@ auto CommandParser::select_command() -> Result {
 	return Result::create_continue();
 }
 
-auto CommandParser::parse_command_parameters(Scanner& scanner) -> Result {
+auto ProgramParser::parse_command_parameters(Scanner& scanner) -> Result {
 	if (!m_selected_command) { // CommandPolicy is Optional.
-		return ParameterParser{m_context}.parse(scanner);
+		auto const environment = ParameterEnvironment{};
+		return ParameterParser{m_context, environment}.parse(scanner);
 	}
 
 	// TODO: context:
 	// - has_version() should return false
 	// - should print selected command's help text
-	return m_selected_command->parameter_parser.parse(scanner);
+	auto parameter_parser = ParameterParser{m_context, m_selected_command->parameter_environment};
+	return parameter_parser.parse(scanner);
 }
 } // namespace clap
 

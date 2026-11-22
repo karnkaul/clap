@@ -8,18 +8,19 @@ namespace {
 class Fixture {
   public:
 	[[nodiscard]] auto parse(ParameterList parameters, std::string_view const expr) {
-		auto ret = parser.set_parameters(std::move(parameters));
+		auto ret = environment.build(context, std::move(parameters));
 		if (ret.should_early_exit()) {
 			return ret;
 		}
 
+		auto parser = ParameterParser{context, environment};
 		auto const args = to_words(expr);
 		auto scanner = Scanner{args};
 		return parser.parse(scanner);
 	}
 
 	MockContext context{};
-	ParameterParser parser{context};
+	ParameterEnvironment environment;
 
 	std::vector<ScannerToken> tokens{};
 };
@@ -156,20 +157,20 @@ TEST_CASE(parameter_parser_invalid_positional_stops_remaining_positionals) {
 TEST_CASE(parameter_parser_reparse_clears_previous_arguments) {
 	auto fixture = Fixture{};
 	auto arg = std::string_view{};
-	auto ret = fixture.parser.set_parameters({
-		positional_required(arg, "ARG"),
-	});
-	EXPECT(!ret.should_early_exit());
 
-	auto first = to_words("first");
-	auto scanner = Scanner{first};
-	auto first_result = fixture.parser.parse(scanner);
+	auto first_result = fixture.parse(
+		{
+			positional_required(arg, "ARG"),
+		},
+		"first");
 	EXPECT(!first_result.should_early_exit());
 	EXPECT(arg == "first");
 
-	auto second = to_words("second");
-	scanner = Scanner{second};
-	auto second_result = fixture.parser.parse(scanner);
+	auto second_result = fixture.parse(
+		{
+			positional_required(arg, "ARG"),
+		},
+		"second");
 	EXPECT(!second_result.should_early_exit());
 	EXPECT(arg == "second");
 }
