@@ -10,13 +10,7 @@ using detail::ProgramParser;
 
 struct Fixture {
 	auto parse(OptionList program_options, CommandList commands, std::string_view const expr) -> Result {
-		auto environment = ProgramEnvironment{};
-		// NOLINTNEXTLINE(readability-trailing-comma)
-		auto result = environment.build({}, {}, std::move(program_options), std::move(commands), policy);
-		if (result != ExitCode::Success) {
-			return Result{result, Outcome::EarlyExit, {}};
-		}
-
+		auto environment = ProgramEnvironment{{}, {}, std::move(program_options), std::move(commands), policy};
 		auto parser = ProgramParser{context, environment};
 		auto const words = to_words(expr);
 		return parser.parse(words);
@@ -128,18 +122,16 @@ TEST_CASE(program_parser_commands_missing_program_option_value) {
 
 TEST_CASE(program_parser_reparse) {
 	auto context = MockContext{};
-	auto environment = ProgramEnvironment{};
-
 	auto arg = std::string_view{};
-	auto exit_code = environment.build({}, // NOLINT(readability-trailing-comma)
-									   {}, // NOLINT(readability-trailing-comma)
-									   {},
-									   {
-										   command("run", {positional_required(arg, "ARG")}),
-									   },
-									   CommandPolicy::Required);
-
-	EXPECT(exit_code == ExitCode::Success);
+	auto environment = ProgramEnvironment{
+		{},
+		{},
+		{},
+		{
+			command("run", {positional_required(arg, "ARG")}),
+		},
+		CommandPolicy::Required,
+	};
 
 	auto parser = ProgramParser{context, environment};
 

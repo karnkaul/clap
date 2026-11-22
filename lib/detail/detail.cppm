@@ -13,6 +13,16 @@ class IContext : public Polymorphic {
 	virtual void print_error(std::string_view message) = 0;
 };
 
+class ParseException : public std::runtime_error {
+  public:
+	explicit ParseException(std::string const& message, ExitCode exit_code);
+
+	[[nodiscard]] auto get_exit_code() const -> ExitCode { return m_exit_code; }
+
+  private:
+	ExitCode m_exit_code;
+};
+
 class ErrorPrinter {
   public:
 	void print_error(std::string_view message) const;
@@ -45,7 +55,49 @@ class ProgramContext : public IContext {
 	std::string_view m_command_identifier{};
 };
 
-class OptionParser {
+class ParameterEnvironment {
+  public:
+	struct Arguments {
+		std::vector<parameter::Positional> pre_list{};
+		std::optional<parameter::List> list{};
+		std::vector<parameter::Positional> post_list{};
+	};
+
+	ParameterEnvironment() = default;
+
+	explicit ParameterEnvironment(ErrorPrinter const& printer, ParameterList parameters) noexcept(false);
+
+	std::vector<parameter::Named> options;
+	Arguments arguments;
+};
+
+class CommandEnvironment {
+  public:
+	explicit CommandEnvironment(ErrorPrinter const& printer, Command command) noexcept(false);
+
+	std::string_view identifier;
+	std::string_view description;
+	std::string_view epilogue;
+	ParameterEnvironment parameter_environment;
+};
+
+class ProgramEnvironment {
+  public:
+	explicit ProgramEnvironment(ErrorPrinter const& printer,
+								Program const& program,
+								std::variant<ParameterList, OptionList> program_parameters,
+								CommandList commands,
+								CommandPolicy command_policy);
+
+	std::string_view program_name;
+	std::string_view version;
+	std::string_view description;
+	ParameterEnvironment parameters;
+	std::vector<CommandEnvironment> commands;
+	CommandPolicy command_policy;
+};
+
+class OptionParserOld {
   public:
 	using Token = ScannerToken;
 
@@ -53,10 +105,13 @@ class OptionParser {
 
 	using Action = std::variant<Iterate, Result>;
 
-	explicit OptionParser(IContext& context, std::span<parameter::Named const> options);
+	explicit OptionParserOld(IContext& context, std::span<parameter::Named const> options);
 
 	[[nodiscard]] auto parse_next(Token const& token) -> Action;
 	[[nodiscard]] auto finish() -> Result;
+
+	[[nodiscard]] auto parse_next2(Token const& token) noexcept(false) -> Iterate;
+	void finish2() noexcept(false);
 
   private:
 	[[nodiscard]] auto parse_long(Token const& token) -> Action;
@@ -81,41 +136,34 @@ class OptionParser {
 	std::string_view m_option_lexeme{};
 };
 
-struct ParameterEnvironment {
-	struct Arguments {
-		std::vector<parameter::Positional> pre_list{};
-		std::optional<parameter::List> list{};
-		std::vector<parameter::Positional> post_list{};
-	};
+class OptionParser {
+  public:
+	using Token = ScannerToken;
 
-	[[nodiscard]] auto build(ErrorPrinter const& printer, ParameterList parameters) -> ExitCode;
+	enum class Iterate : std::int8_t { Consume, Pass, EarlyExit };
 
-	std::vector<parameter::Named> options{};
-	Arguments arguments{};
-};
+	explicit OptionParser(IContext& context, std::span<parameter::Named const> options);
 
-struct CommandEnvironment {
-	auto build(ErrorPrinter const& printer, Command command) -> ExitCode;
+	[[nodiscard]] auto parse_next(Token const& token) noexcept(false) -> Iterate;
+	void finish() noexcept(false);
 
-	std::string_view identifier{};
-	std::string_view description{};
-	std::string_view epilogue{};
-	ParameterEnvironment parameter_environment{};
-};
+  private:
+	auto parse_long(Token const& token) -> Iterate;
+	void parse_shorts(Token const& token);
+	void parse_option_value(parameter::Named const& named, std::string_view value, std::string_view option_lexeme);
 
-struct ProgramEnvironment {
-	auto build(ErrorPrinter const& printer,
-			   Program const& program,
-			   std::variant<ParameterList, OptionList> program_parameters,
-			   CommandList commands,
-			   CommandPolicy command_policy) -> ExitCode;
+	void assign_value_to(parameter::Named const& named, std::string_view value, std::string_view option_lexeme) const;
 
-	std::string_view program_name{};
-	std::string_view version{};
-	std::string_view description{};
-	ParameterEnvironment parameters{};
-	std::vector<CommandEnvironment> commands{};
-	CommandPolicy command_policy{CommandPolicy::Required};
+	template <typename T>
+	[[nodiscard]] auto get_named(T t) const -> parameter::Named const&;
+
+	IContext& m_context;
+
+	std::span<parameter::Named const> m_options{};
+
+	bool m_force_ended{};
+	parameter::Named const* m_expects_value{};
+	std::string_view m_option_lexeme{};
 };
 
 class ParameterParser {
@@ -128,13 +176,13 @@ class ParameterParser {
 	using Token = ScannerToken;
 	using Iterate = OptionParser::Iterate;
 
-	auto parse_arguments() -> Result;
-	auto parse_front_to_list() -> Result;
-	auto parse_back_to_list() -> Result;
-	auto parse_list() -> Result;
+	void parse_arguments();
+	void parse_front_to_list();
+	void parse_back_to_list();
+	void parse_list();
 
-	auto check_required(parameter::Positional const& positional) -> Result;
-	auto parse_positional(parameter::Positional const& positional, std::string_view value) -> Result;
+	void check_required(parameter::Positional const& positional);
+	void parse_positional(parameter::Positional const& positional, std::string_view value);
 
 	IContext& m_context;
 	ParameterEnvironment const& m_environment;
@@ -156,9 +204,9 @@ class ProgramParser {
 	auto parse_parameters(Scanner& scanner) -> Result;
 	auto parse_commands(Scanner& scanner) -> Result;
 
-	auto parse_program_options(Scanner& scanner) -> Result;
-	auto select_command() -> Result;
-	auto parse_command_parameters(Scanner& scanner) -> Result;
+	void parse_program_options(Scanner& scanner);
+	void select_command();
+	void parse_command_parameters(Scanner& scanner);
 
 	IContext& m_context;
 	ProgramEnvironment const& m_environment;

@@ -22,5 +22,6 @@ Checks: 'clang-analyzer-*,
 	-readability-magic-numbers,
   -readability-non-const-parameter,
 	-readability-redundant-member-init,
+  -readability-trailing-comma,
 	-readability-uppercase-literal-suffix'
 ...

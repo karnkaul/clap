@@ -1,4 +1,4 @@
-import clap.parser;
+import clap.detail;
 import clap.scanner;
 
 #include "common.hpp"
@@ -7,6 +7,8 @@ import clap.scanner;
 namespace clap::test {
 namespace {
 using detail::OptionParser;
+using Iterate = OptionParser::Iterate;
+using detail::ParseException;
 
 class Fixture {
   public:
@@ -23,22 +25,24 @@ TEST_CASE(option_parser_builtins) {
 	auto fixture = Fixture{{}};
 	fixture.tokens = to_tokens("--help");
 	auto action = fixture.parser.parse_next(fixture.tokens.front());
-	ASSERT(std::holds_alternative<Result>(action));
-	EXPECT(std::get<Result>(action).exit_code() == ExitCode::Success);
+	EXPECT(action == Iterate::EarlyExit);
 	EXPECT(fixture.context.m_help_printed == true);
 
 	fixture.tokens = to_tokens("--version");
 	fixture.context.m_has_version = true;
 	action = fixture.parser.parse_next(fixture.tokens.front());
-	ASSERT(std::holds_alternative<Result>(action));
-	EXPECT(std::get<Result>(action).exit_code() == ExitCode::Success);
+	EXPECT(action == Iterate::EarlyExit);
 	EXPECT(fixture.context.m_version_printed == true);
 
 	fixture.context.m_version_printed = false;
 	fixture.context.m_has_version = false;
-	action = fixture.parser.parse_next(fixture.tokens.front());
-	ASSERT(std::holds_alternative<Result>(action));
-	EXPECT(std::get<Result>(action).exit_code() == ExitCode::UnrecognizedOption);
+	auto exit_code = ExitCode::Success;
+	try {
+		action = fixture.parser.parse_next(fixture.tokens.front());
+	} catch (ParseException const& e) {
+		exit_code = e.get_exit_code();
+	}
+	EXPECT(exit_code == ExitCode::UnrecognizedOption);
 	EXPECT(fixture.context.m_version_printed == false);
 }
 
@@ -52,22 +56,24 @@ TEST_CASE(option_parser_one_flag) {
 	fixture.tokens = to_tokens("--flag");
 
 	auto action = fixture.parser.parse_next(fixture.tokens.front());
-	ASSERT(std::holds_alternative<OptionParser::Iterate>(action));
-	EXPECT(std::get<OptionParser::Iterate>(action) == OptionParser::Iterate::Consume);
+	EXPECT(action == Iterate::Consume);
 	EXPECT(flag == true);
 
 	fixture.tokens = to_tokens("-f");
 	flag = false;
 
 	action = fixture.parser.parse_next(fixture.tokens.front());
-	ASSERT(std::holds_alternative<OptionParser::Iterate>(action));
-	EXPECT(std::get<OptionParser::Iterate>(action) == OptionParser::Iterate::Consume);
+	EXPECT(action == Iterate::Consume);
 	EXPECT(flag == true);
 
 	fixture.tokens = to_tokens("--foo");
-	action = fixture.parser.parse_next(fixture.tokens.front());
-	ASSERT(std::holds_alternative<Result>(action));
-	EXPECT(std::get<Result>(action).exit_code() == ExitCode::UnrecognizedOption);
+	auto exit_code = ExitCode::Success;
+	try {
+		action = fixture.parser.parse_next(fixture.tokens.front());
+	} catch (ParseException const& e) {
+		exit_code = e.get_exit_code();
+	}
+	EXPECT(exit_code == ExitCode::UnrecognizedOption);
 }
 
 TEST_CASE(option_parser_multiple_named) {
@@ -90,35 +96,37 @@ TEST_CASE(option_parser_multiple_named) {
 
 		switch (i) {
 		case 0: {
-			ASSERT(std::holds_alternative<OptionParser::Iterate>(action));
-			EXPECT(std::get<OptionParser::Iterate>(action) == OptionParser::Iterate::Consume);
+			EXPECT(action == Iterate::Consume);
 			EXPECT(flag == true);
 			break;
 		}
 
 		case 1: {
-			ASSERT(std::holds_alternative<OptionParser::Iterate>(action));
-			EXPECT(std::get<OptionParser::Iterate>(action) == OptionParser::Iterate::Pass);
+			EXPECT(action == Iterate::Pass);
 			break;
 		}
 
 		case 2: {
-			ASSERT(std::holds_alternative<OptionParser::Iterate>(action));
-			EXPECT(std::get<OptionParser::Iterate>(action) == OptionParser::Iterate::Consume);
+			EXPECT(action == Iterate::Consume);
 			EXPECT(str == "foo");
 			break;
 		}
 
 		case 3: {
-			ASSERT(std::holds_alternative<OptionParser::Iterate>(action));
-			EXPECT(std::get<OptionParser::Iterate>(action) == OptionParser::Iterate::Consume);
+			EXPECT(action == Iterate::Consume);
 			EXPECT(i32 == 42);
 			break;
 		}
 		}
 	}
 
-	EXPECT(fixture.parser.finish().exit_code() == ExitCode::Success);
+	auto thrown = false;
+	try {
+		fixture.parser.finish();
+	} catch (ParseException const&) {
+		thrown = true;
+	}
+	EXPECT(!thrown);
 }
 
 TEST_CASE(option_parser_terminate_options) {
@@ -130,21 +138,25 @@ TEST_CASE(option_parser_terminate_options) {
 
 		switch (i) {
 		case 0: {
-			ASSERT(std::holds_alternative<OptionParser::Iterate>(action));
-			EXPECT(std::get<OptionParser::Iterate>(action) == OptionParser::Iterate::Consume);
+			EXPECT(action == Iterate::Consume);
 			break;
 		}
 
 		case 1:
 		case 2: {
-			ASSERT(std::holds_alternative<OptionParser::Iterate>(action));
-			EXPECT(std::get<OptionParser::Iterate>(action) == OptionParser::Iterate::Pass);
+			EXPECT(action == Iterate::Pass);
 			break;
 		}
 		}
 	}
 
-	EXPECT(fixture.parser.finish().exit_code() == ExitCode::Success);
+	auto thrown = false;
+	try {
+		fixture.parser.finish();
+	} catch (ParseException const&) {
+		thrown = true;
+	}
+	EXPECT(!thrown);
 }
 
 TEST_CASE(option_parser_missing_value) {
@@ -159,11 +171,16 @@ TEST_CASE(option_parser_missing_value) {
 
 	fixture.tokens = to_tokens("-fi");
 	auto action = fixture.parser.parse_next(fixture.tokens.front());
-	ASSERT(std::holds_alternative<OptionParser::Iterate>(action));
-	EXPECT(std::get<OptionParser::Iterate>(action) == OptionParser::Iterate::Consume);
-
+	EXPECT(action == Iterate::Consume);
 	EXPECT(flag == true);
-	EXPECT(fixture.parser.finish().exit_code() == ExitCode::OptionRequiresArgument);
+
+	auto exit_code = ExitCode::Success;
+	try {
+		fixture.parser.finish();
+	} catch (ParseException const& e) {
+		exit_code = e.get_exit_code();
+	}
+	EXPECT(exit_code == ExitCode::OptionRequiresArgument);
 }
 } // namespace
 } // namespace clap::test

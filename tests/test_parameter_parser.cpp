@@ -5,18 +5,14 @@ import clap.parser;
 
 namespace clap::test {
 namespace {
-using detail::ParameterParser;
 using detail::ParameterEnvironment;
+using detail::ParameterParser;
 
 class Fixture {
   public:
 	[[nodiscard]] auto parse(ParameterList parameters, std::string_view const expr) {
 		// NOLINTNEXTLINE(readability-trailing-comma)
-		auto ret = environment.build({}, std::move(parameters));
-		if (ret != ExitCode::Success) {
-			return Result{ret, Outcome::EarlyExit, {}};
-		}
-
+		environment = ParameterEnvironment{{}, std::move(parameters)};
 		auto parser = ParameterParser{context, environment};
 		auto const args = to_words(expr);
 		auto scanner = Scanner{args};
