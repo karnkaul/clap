@@ -6,6 +6,8 @@ import clap.scanner;
 
 namespace clap::test {
 namespace {
+using detail::OptionParser;
+
 class Fixture {
   public:
 	explicit Fixture(OptionList options) : options(std::move(options)), parser(context, this->options) {}

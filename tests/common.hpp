@@ -1,9 +1,9 @@
 #pragma once
 
-import clap.parser;
+import clap.detail;
 
 namespace clap::test {
-class MockContext : public IContext {
+class MockContext : public detail::IContext {
   public:
 	void print_help_text() final { m_help_printed = true; }
 	[[nodiscard]] auto has_version() const -> bool final { return m_has_version; }

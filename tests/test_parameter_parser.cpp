@@ -5,6 +5,9 @@ import clap.parser;
 
 namespace clap::test {
 namespace {
+using detail::ParameterParser;
+using detail::ParameterEnvironment;
+
 class Fixture {
   public:
 	[[nodiscard]] auto parse(ParameterList parameters, std::string_view const expr) {

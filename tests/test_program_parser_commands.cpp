@@ -5,6 +5,9 @@ import clap.parser;
 
 namespace clap::test {
 namespace {
+using detail::ProgramEnvironment;
+using detail::ProgramParser;
+
 struct Fixture {
 	auto parse(OptionList program_options, CommandList commands, std::string_view const expr) -> Result {
 		auto environment = ProgramEnvironment{};
