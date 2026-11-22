@@ -9,9 +9,9 @@ struct Fixture {
 	auto parse(OptionList program_options, CommandList commands, std::string_view const expr) -> Result {
 		auto environment = ProgramEnvironment{};
 		// NOLINTNEXTLINE(readability-trailing-comma)
-		auto result = environment.build(context, {}, std::move(program_options), std::move(commands), policy);
-		if (result.should_early_exit()) {
-			return result;
+		auto result = environment.build({}, {}, std::move(program_options), std::move(commands), policy);
+		if (result != ExitCode::Success) {
+			return Result{result, Outcome::EarlyExit, {}};
 		}
 
 		auto parser = ProgramParser{context, environment};
@@ -128,20 +128,20 @@ TEST_CASE(program_parser_reparse) {
 	auto environment = ProgramEnvironment{};
 
 	auto arg = std::string_view{};
-	auto result = environment.build(context,
-									{}, // NOLINT(readability-trailing-comma)
-									{},
-									{
-										command("run", {positional_required(arg, "ARG")}),
-									},
-									CommandPolicy::Required);
+	auto exit_code = environment.build({}, // NOLINT(readability-trailing-comma)
+									   {}, // NOLINT(readability-trailing-comma)
+									   {},
+									   {
+										   command("run", {positional_required(arg, "ARG")}),
+									   },
+									   CommandPolicy::Required);
 
-	EXPECT(!result.should_early_exit());
+	EXPECT(exit_code == ExitCode::Success);
 
 	auto parser = ProgramParser{context, environment};
 
 	auto words = to_words("run first");
-	result = parser.parse(words);
+	auto result = parser.parse(words);
 	EXPECT(!result.should_early_exit());
 	EXPECT(arg == "first");
 

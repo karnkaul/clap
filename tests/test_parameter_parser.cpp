@@ -8,9 +8,10 @@ namespace {
 class Fixture {
   public:
 	[[nodiscard]] auto parse(ParameterList parameters, std::string_view const expr) {
-		auto ret = environment.build(context, std::move(parameters));
-		if (ret.should_early_exit()) {
-			return ret;
+		// NOLINTNEXTLINE(readability-trailing-comma)
+		auto ret = environment.build({}, std::move(parameters));
+		if (ret != ExitCode::Success) {
+			return Result{ret, Outcome::EarlyExit, {}};
 		}
 
 		auto parser = ParameterParser{context, environment};

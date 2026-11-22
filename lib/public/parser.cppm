@@ -13,6 +13,15 @@ class IContext : public Polymorphic {
 	virtual void print_error(std::string_view message) = 0;
 };
 
+class ErrorPrinter {
+  public:
+	void print_error(std::string_view message) const;
+
+	IPrinter* printer{};
+	std::string_view program_name{};
+	std::string_view command_identifier{};
+};
+
 class OptionParser {
   public:
 	using Token = ScannerToken;
@@ -56,14 +65,14 @@ struct ParameterEnvironment {
 		std::vector<parameter::Positional> post_list{};
 	};
 
-	[[nodiscard]] auto build(IContext& context, ParameterList parameters) -> Result;
+	[[nodiscard]] auto build(ErrorPrinter const& printer, ParameterList parameters) -> ExitCode;
 
 	std::vector<parameter::Named> options{};
 	Arguments arguments{};
 };
 
 struct CommandEnvironment {
-	auto build(IContext& context, Command command) -> Result;
+	auto build(ErrorPrinter const& printer, Command command) -> ExitCode;
 
 	std::string_view identifier{};
 	std::string_view description{};
@@ -72,12 +81,11 @@ struct CommandEnvironment {
 };
 
 struct ProgramEnvironment {
-	auto build(IContext& context, Program const& program, ParameterList parameters) -> Result;
-	auto build(IContext& context,
+	auto build(ErrorPrinter const& printer,
 			   Program const& program,
 			   std::variant<ParameterList, OptionList> program_parameters,
 			   CommandList commands,
-			   CommandPolicy command_policy) -> Result;
+			   CommandPolicy command_policy) -> ExitCode;
 
 	std::string_view program_name{};
 	std::string_view version{};

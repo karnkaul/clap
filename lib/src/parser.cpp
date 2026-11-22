@@ -4,6 +4,29 @@ module;
 
 module clap.parser;
 
+#pragma region printer
+
+namespace clap {
+void ErrorPrinter::print_error(std::string_view const message) const {
+	if (!printer) {
+		return;
+	}
+
+	auto text = std::string{};
+	if (!program_name.empty()) {
+		std::format_to(std::back_inserter(text), "{}: ", program_name);
+	}
+	if (!command_identifier.empty()) {
+		std::format_to(std::back_inserter(text), "{}: ", command_identifier);
+	}
+
+	text.append(message);
+	printer->printerr(text);
+}
+} // namespace clap
+
+#pragma endregion
+
 #pragma region OptionParser
 
 namespace clap {
@@ -182,7 +205,7 @@ auto OptionParser::find_named(T const t) const -> parameter::Named const* {
 #pragma region environment
 
 namespace clap {
-auto ParameterEnvironment::build(IContext& context, ParameterList parameters) -> Result {
+auto ParameterEnvironment::build(ErrorPrinter const& printer, ParameterList parameters) -> ExitCode {
 	options.clear();
 	arguments.pre_list.clear();
 	arguments.list.reset();
@@ -192,12 +215,12 @@ auto ParameterEnvironment::build(IContext& context, ParameterList parameters) ->
 	auto const visitor = Visitor{
 		[&](parameter::Named named) {
 			options.push_back(std::move(named));
-			return Result::create_continue();
+			return ExitCode::Success;
 		},
 		[&](parameter::Positional positional) {
 			if (optional_positionals && positional.type == parameter::Type::Required) {
-				context.print_error(std::format("required positional after optional(s): '{}'", positional.name));
-				return Result::create_early_exit(ExitCode::InvalidParameter);
+				printer.print_error(std::format("required positional after optional(s): '{}'", positional.name));
+				return ExitCode::InvalidParameter;
 			}
 
 			auto& target = arguments.list ? arguments.post_list : arguments.pre_list;
@@ -206,49 +229,41 @@ auto ParameterEnvironment::build(IContext& context, ParameterList parameters) ->
 				optional_positionals = true;
 			}
 
-			return Result::create_continue();
+			return ExitCode::Success;
 		},
 		[&](parameter::List list) {
 			if (arguments.list) {
-				context.print_error(std::format("only one list parameter is permitted: '{}'", list.name));
-				return Result::create_early_exit(ExitCode::InvalidParameter);
+				printer.print_error(std::format("only one list parameter is permitted: '{}'", list.name));
+				return ExitCode::InvalidParameter;
 			}
 
 			arguments.list.emplace(std::move(list));
-			return Result::create_continue();
+			return ExitCode::Success;
 		},
 	};
 
 	for (auto& parameter : parameters) {
 		auto const result = std::visit(visitor, std::move(parameter));
-		if (result.should_early_exit()) {
+		if (result != ExitCode::Success) {
 			return result;
 		}
 	}
 
-	return Result::create_continue();
+	return ExitCode::Success;
 }
 
-auto CommandEnvironment::build(IContext& context, Command command) -> Result {
+auto CommandEnvironment::build(ErrorPrinter const& printer, Command command) -> ExitCode {
 	identifier = command.identifier;
 	description = command.description;
 	epilogue = command.epilogue;
-	return parameter_environment.build(context, std::move(command.parameters));
+	return parameter_environment.build(printer, std::move(command.parameters));
 }
 
-auto ProgramEnvironment::build(IContext& context, Program const& program, ParameterList parameters) -> Result {
-	program_name = program.name;
-	version = program.version;
-	description = program.description;
-	commands.clear();
-	return this->parameters.build(context, std::move(parameters));
-}
-
-auto ProgramEnvironment::build(IContext& context,
+auto ProgramEnvironment::build(ErrorPrinter const& printer,
 							   Program const& program,
 							   std::variant<ParameterList, OptionList> program_parameters,
 							   CommandList commands,
-							   CommandPolicy const command_policy) -> Result {
+							   CommandPolicy const command_policy) -> ExitCode {
 	program_name = program.name;
 	version = program.version;
 	description = program.description;
@@ -256,28 +271,29 @@ auto ProgramEnvironment::build(IContext& context,
 
 	auto const visitor = Visitor{
 		[&](ParameterList parameter_list) {
-			return parameters.build(context, std::move(parameter_list));
+			return parameters.build(printer, std::move(parameter_list));
 		},
 		[&](OptionList option_list) {
 			parameters.options = std::move(option_list);
-			return Result::create_continue();
+			return ExitCode::Success;
 		},
 	};
 
 	auto const result = std::visit(visitor, std::move(program_parameters));
-	if (result.should_early_exit()) {
+	if (result != ExitCode::Success) {
 		return result;
 	}
 
 	this->commands.clear();
 	for (auto& command : commands) {
 		auto& environment = this->commands.emplace_back();
-		auto const result = environment.build(context, std::move(command));
-		if (result.should_early_exit()) {
+		auto const result = environment.build(printer, std::move(command));
+		if (result != ExitCode::Success) {
 			return result;
 		}
 	}
-	return Result::create_continue();
+
+	return ExitCode::Success;
 }
 } // namespace clap
 
