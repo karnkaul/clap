@@ -18,8 +18,6 @@ class Scanner {
 
 	auto scan_next(Token& out) -> bool;
 
-	[[nodiscard]] auto get_remain() const -> std::span<std::string_view const> { return m_remain; }
-
   private:
 	auto scan_next() -> Token;
 	auto scan_quoted() -> Token;
@@ -29,8 +27,6 @@ class Scanner {
 	[[nodiscard]] auto to_token(Token::Type type, std::size_t length = 0uz) -> Token;
 
 	std::span<std::string_view const> m_remain{};
-	std::span<std::string_view const> m_unscanned{};
 	std::string_view m_current{};
-	std::size_t m_scanned{};
 };
 } // namespace clap

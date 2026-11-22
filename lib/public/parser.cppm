@@ -57,11 +57,9 @@ class ParameterParser {
 
 	auto set_parameters(ParameterList parameters) -> Result;
 
-	auto parse(std::span<std::string_view const> args) -> Result;
+	auto parse(Scanner& scanner) -> Result;
 
   private:
-	using Argument = std::variant<parameter::Positional, parameter::List>;
-
 	void clear_parameters();
 
 	void add_option(parameter::Named option);
@@ -90,20 +88,20 @@ class ParameterParser {
 
 class CommandParser {
   public:
-	CommandParser(IContext& context) : m_context(context) {}
+	explicit CommandParser(IContext& context);
 
-	auto set_spec(spec::Commands spec) -> Result;
+	auto set_parameters(OptionList program_options, CommandList commands, CommandPolicy policy) -> Result;
 
-	auto parse(std::span<std::string_view const> args) -> Result;
+	auto parse(Scanner& scanner) -> Result;
 
   private:
 	using Token = ScannerToken;
 
-	void clear_spec();
+	void clear_parameters();
 
-	auto parse_program_options() -> Result;
+	auto parse_program_options(Scanner& scanner) -> Result;
 	auto select_command() -> Result;
-	auto parse_command_parameters() -> Result;
+	auto parse_command_parameters(Scanner& scanner) -> Result;
 
 	struct Entry {
 		Command command;
@@ -116,7 +114,6 @@ class CommandParser {
 	OptionList m_program_options{};
 	CommandPolicy m_policy{};
 
-	std::span<std::string_view const> m_args{};
 	Token m_command_token{};
 	Entry* m_selected_command{};
 };

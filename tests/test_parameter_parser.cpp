@@ -14,7 +14,8 @@ class Fixture {
 		}
 
 		auto const args = to_words(expr);
-		return parser.parse(args);
+		auto scanner = Scanner{args};
+		return parser.parse(scanner);
 	}
 
 	MockContext context{};
@@ -161,12 +162,14 @@ TEST_CASE(parameter_parser_reparse_clears_previous_arguments) {
 	EXPECT(!ret.should_early_exit());
 
 	auto first = to_words("first");
-	auto first_result = fixture.parser.parse(first);
+	auto scanner = Scanner{first};
+	auto first_result = fixture.parser.parse(scanner);
 	EXPECT(!first_result.should_early_exit());
 	EXPECT(arg == "first");
 
 	auto second = to_words("second");
-	auto second_result = fixture.parser.parse(second);
+	scanner = Scanner{second};
+	auto second_result = fixture.parser.parse(scanner);
 	EXPECT(!second_result.should_early_exit());
 	EXPECT(arg == "second");
 }

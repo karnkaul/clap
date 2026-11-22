@@ -208,12 +208,11 @@ auto ParameterParser::set_parameters(ParameterList parameters) -> Result {
 	return Result::create_continue();
 }
 
-auto ParameterParser::parse(std::span<std::string_view const> args) -> Result {
+auto ParameterParser::parse(Scanner& scanner) -> Result {
 	m_argument_tokens.clear();
 	m_arguments = {};
 
 	auto option_parser = OptionParser{m_context, m_options};
-	auto scanner = Scanner{args};
 	auto token = ScannerToken{};
 
 	auto result = Result::create_continue();
@@ -378,10 +377,13 @@ auto ParameterParser::parse_positional(parameter::Positional const& positional, 
 #pragma region CommandParser
 
 namespace clap {
-auto CommandParser::set_spec(spec::Commands spec) -> Result {
-	clear_spec();
+CommandParser::CommandParser(IContext& context) : m_context(context) {}
 
-	for (auto& command : spec.commands) {
+auto CommandParser::set_parameters(OptionList program_options, CommandList commands, CommandPolicy const policy)
+	-> Result {
+	clear_parameters();
+
+	for (auto& command : commands) {
 		auto entry = Entry{
 			.command = std::move(command),
 			.parameter_parser = ParameterParser{m_context},
@@ -389,25 +391,24 @@ auto CommandParser::set_spec(spec::Commands spec) -> Result {
 
 		auto const result = entry.parameter_parser.set_parameters(std::move(entry.command.parameters));
 		if (result.should_early_exit()) {
-			clear_spec();
+			clear_parameters();
 			return result;
 		}
 
 		m_entries.push_back(std::move(entry));
 	}
 
-	m_program_options = std::move(spec.options);
-	m_policy = spec.policy;
+	m_program_options = std::move(program_options);
+	m_policy = policy;
 
 	return Result::create_continue();
 }
 
-auto CommandParser::parse(std::span<std::string_view const> args) -> Result {
-	m_args = {args.begin(), args.end()};
+auto CommandParser::parse(Scanner& scanner) -> Result {
 	m_command_token = {};
 	m_selected_command = {};
 
-	auto result = parse_program_options();
+	auto result = parse_program_options(scanner);
 	if (result.should_early_exit()) {
 		return result;
 	}
@@ -421,7 +422,7 @@ auto CommandParser::parse(std::span<std::string_view const> args) -> Result {
 		return result;
 	}
 
-	result = parse_command_parameters();
+	result = parse_command_parameters(scanner);
 	if (result.should_early_exit()) {
 		return result;
 	}
@@ -432,18 +433,15 @@ auto CommandParser::parse(std::span<std::string_view const> args) -> Result {
 	return Result{ExitCode::Success, Outcome::Continue, m_selected_command->command.identifier};
 }
 
-void CommandParser::clear_spec() {
+void CommandParser::clear_parameters() {
 	m_entries.clear();
 	m_program_options.clear();
-	m_policy = CommandPolicy::Required;
-	m_args = {};
 	m_command_token = {};
 	m_selected_command = {};
 }
 
-auto CommandParser::parse_program_options() -> Result {
+auto CommandParser::parse_program_options(Scanner& scanner) -> Result {
 	auto option_parser = OptionParser{m_context, m_program_options};
-	auto scanner = Scanner{m_args};
 	auto token = Token{};
 	while (scanner.scan_next(token)) {
 		auto const action = option_parser.parse_next(token);
@@ -467,7 +465,6 @@ auto CommandParser::parse_program_options() -> Result {
 		return Result::create_early_exit(ExitCode::MissingRequiredCommand);
 	}
 
-	m_args = scanner.get_remain();
 	return Result::create_continue();
 }
 
@@ -485,20 +482,15 @@ auto CommandParser::select_command() -> Result {
 	return Result::create_continue();
 }
 
-auto CommandParser::parse_command_parameters() -> Result {
+auto CommandParser::parse_command_parameters(Scanner& scanner) -> Result {
 	if (!m_selected_command) { // CommandPolicy is Optional.
-		if (!m_args.empty()) {
-			m_context.print_error(std::format("unknown argument: {}", m_args.front()));
-			return Result::create_early_exit(ExitCode::UnknownArgument);
-		}
-
-		return Result::create_continue();
+		return ParameterParser{m_context}.parse(scanner);
 	}
 
 	// TODO: context:
 	// - has_version() should return false
 	// - should print selected command's help text
-	return m_selected_command->parameter_parser.parse(m_args);
+	return m_selected_command->parameter_parser.parse(scanner);
 }
 } // namespace clap
 
