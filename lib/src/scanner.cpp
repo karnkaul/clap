@@ -6,7 +6,7 @@ namespace clap {
 Scanner::Scanner(std::span<std::string_view const> words) : m_remain(words) { advance(); }
 
 auto Scanner::scan_next(Token& out) -> bool {
-	if (m_current.empty()) {
+	if (at_end()) {
 		out = Token{.type = Token::Type::Eof};
 		return false;
 	}

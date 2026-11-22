@@ -4,7 +4,7 @@ module;
 
 module clap.detail;
 
-#pragma region Context
+#pragma region ErrorPrinter
 
 namespace clap::detail {
 void ErrorPrinter::print_error(std::string_view const message) const {
@@ -23,31 +23,6 @@ void ErrorPrinter::print_error(std::string_view const message) const {
 	text.append(message);
 	printer->printerr(text);
 }
-
-ProgramContext::ProgramContext(Program const& program, IPrinter* custom_printer)
-	: m_error_printer{.printer = &or_default(custom_printer), .program_name = program.name},
-	  m_version(program.version),
-	  m_description(program.description),
-	  m_printer(m_error_printer.printer) {}
-
-void ProgramContext::print_help_text() {
-	// TODO
-}
-
-auto ProgramContext::has_version() const -> bool { return !m_version.empty(); }
-
-void ProgramContext::print_version() {
-	if (m_version.empty()) {
-		return;
-	}
-
-	m_printer->println(m_version);
-}
-
-void ProgramContext::set_command_identifier(std::string_view const identifier) {
-	m_command_identifier = identifier;
-	m_version = {};
-}
 } // namespace clap::detail
 
 #pragma endregion
@@ -58,6 +33,200 @@ namespace clap::detail {
 ParseException::ParseException(std::string const& message, ExitCode const exit_code)
 	: std::runtime_error{message},
 	  m_exit_code(exit_code) {}
+} // namespace clap::detail
+
+#pragma endregion
+
+#pragma region ProgramContext
+
+namespace clap::detail {
+namespace {
+struct Joiner {
+	void join(std::string_view const s) { join("{}", s); }
+
+	template <typename... Args>
+	void join(std::format_string<Args...> fmt, Args&&... args) {
+		if (!text.empty() && text.back() != '\n' && !text.ends_with(delimiter)) {
+			text.append(delimiter);
+		}
+		std::format_to(std::back_inserter(text), fmt, std::forward<Args>(args)...);
+	}
+
+	void serialize_positionals_usage(std::span<parameter::Positional const> positionals) {
+		for (auto const& positional : positionals) {
+			if (positional.type == parameter::Type::Optional) {
+				join("[{}]", positional.name);
+			} else {
+				join("<{}>", positional.name);
+			}
+		}
+	}
+
+	void serialize_positionals_usage(ParameterEnvironment::Arguments const& arguments) {
+		serialize_positionals_usage(arguments.pre_list);
+		if (arguments.list) {
+			join("[{}]...", arguments.list->name);
+		}
+		serialize_positionals_usage(arguments.post_list);
+		text.push_back('\n');
+	}
+
+	void serialize_named_list(std::span<parameter::Named const> parameters, bool const add_version) {
+		text.append("\nOPTIONS\n");
+		for (auto const& named : parameters) {
+			text.append("  ");
+			if (named.letter) {
+				std::format_to(std::back_inserter(text), "-{}", named.letter);
+				if (!named.word.empty()) {
+					text.append(", ");
+				}
+			} else {
+				text.append("    ");
+			}
+			if (!named.word.empty()) {
+				std::format_to(std::back_inserter(text), "--{}", named.word);
+			}
+			text.append("\n");
+			if (!named.description.empty()) {
+				join("{: >8}{}\n", ' ', named.description);
+			}
+		}
+		if (add_version) {
+			std::format_to(std::back_inserter(text), "{: >6}--version\n{: >8}display version and exit\n", ' ', ' ');
+		}
+		std::format_to(std::back_inserter(text), "{: >6}--help\n{: >8}display this help and exit\n", ' ', ' ');
+	}
+
+	void serialize_positional_list(std::span<parameter::Positional const> positionals) {
+		for (auto const& positional : positionals) {
+			join("  {}\n", positional.name);
+			if (!positional.description.empty()) {
+				join("{: >8}{}\n", ' ', positional.description);
+			}
+		}
+	}
+
+	void serialize_positional_list(ParameterEnvironment::Arguments const& arguments) {
+		if (arguments.pre_list.empty() && !arguments.list && arguments.post_list.empty()) {
+			return;
+		}
+
+		text.append("\nARGUMENTS\n");
+		serialize_positional_list(arguments.pre_list);
+		if (arguments.list) {
+			join("  {}\n", arguments.list->name);
+			if (!arguments.list->description.empty()) {
+				join("{: >8}{}\n", ' ', arguments.list->description);
+			}
+		}
+		serialize_positional_list(arguments.post_list);
+	}
+
+	void serialize_command_list(std::span<CommandEnvironment const> commands) {
+		if (commands.empty()) {
+			return;
+		}
+
+		text.append("\nCOMMANDS\n");
+		for (auto const& command : commands) {
+			join("  {}\n", command.identifier);
+			if (!command.description.empty()) {
+				join("{: >8}{}\n", ' ', command.description);
+			}
+		}
+	}
+
+	std::string_view delimiter{" "};
+
+	std::string text{};
+};
+} // namespace
+
+ProgramContext::ProgramContext(Program const& program,
+							   std::variant<ParameterList, OptionList> program_parameters,
+							   CommandList commands,
+							   CommandPolicy command_policy,
+							   IPrinter* custom_printer)
+	: m_error_printer{.printer = &or_default(custom_printer), .program_name = program.name},
+	  m_environment(m_error_printer, program, std::move(program_parameters), std::move(commands), command_policy),
+	  m_printer(m_error_printer.printer) {}
+
+void ProgramContext::print_help_text() { m_printer->println(help_text()); }
+
+auto ProgramContext::has_version() const -> bool { return !m_environment.version.empty(); }
+
+void ProgramContext::print_version() {
+	if (m_environment.version.empty()) {
+		return;
+	}
+
+	m_printer->println(m_environment.version);
+}
+
+auto ProgramContext::help_text_parameters() const -> std::string {
+	auto joiner = Joiner{};
+
+	joiner.text = "Usage:";
+	joiner.join(m_error_printer.program_name);
+	if (m_selected_command) {
+		joiner.join("{}", m_error_printer.command_identifier);
+	}
+	joiner.join("[OPTION]...");
+	if (m_selected_command) {
+		joiner.serialize_positionals_usage(m_selected_command->parameter_environment.arguments);
+	} else {
+		joiner.serialize_positionals_usage(m_environment.parameters.arguments);
+	}
+
+	auto const desc = m_selected_command ? m_selected_command->description : m_environment.description;
+	if (!desc.empty()) {
+		joiner.join("{}\n", desc);
+	}
+
+	if (m_selected_command) {
+		joiner.serialize_named_list(m_selected_command->parameter_environment.options, false);
+		joiner.serialize_positional_list(m_selected_command->parameter_environment.arguments);
+	} else {
+		joiner.serialize_named_list(m_environment.parameters.options, has_version());
+		joiner.serialize_positional_list(m_environment.parameters.arguments);
+	}
+
+	return std::move(joiner.text);
+}
+
+auto ProgramContext::help_text_commands() const -> std::string {
+	auto joiner = Joiner{};
+
+	joiner.text = "Usage:";
+	joiner.join(m_error_printer.program_name);
+	joiner.join("[OPTION]...");
+	joiner.join(m_environment.command_policy == CommandPolicy::Optional ? "[COMMAND]" : "<COMMAND>");
+	joiner.join("[OPTION]... <ARG>...\n");
+
+	if (!m_environment.description.empty()) {
+		joiner.join("{}\n", m_environment.description);
+	}
+
+	joiner.serialize_named_list(m_environment.parameters.options, has_version());
+	joiner.serialize_command_list(m_environment.commands);
+
+	return std::move(joiner.text);
+}
+
+auto ProgramContext::help_text() const -> std::string {
+	if (!m_selected_command && !m_environment.commands.empty()) {
+		return help_text_commands();
+	}
+	return help_text_parameters();
+}
+
+void ProgramContext::set_selected_command(CommandEnvironment const* command_enviroment) {
+	m_selected_command = command_enviroment;
+	if (m_selected_command) {
+		m_error_printer.command_identifier = m_selected_command->identifier;
+		m_environment.version = {};
+	}
+}
 } // namespace clap::detail
 
 #pragma endregion
@@ -80,159 +249,7 @@ struct ArgSplit {
 	std::string_view left{};
 	std::string_view right{};
 };
-
-[[nodiscard]] auto or_iterate(Result const result, OptionParserOld::Iterate const it) -> OptionParserOld::Action {
-	if (result.should_early_exit()) {
-		return result;
-	}
-	return it;
-}
 } // namespace
-
-OptionParserOld::OptionParserOld(IContext& context, std::span<parameter::Named const> options)
-	: m_context(context),
-	  m_options(options) {}
-
-auto OptionParserOld::parse_next(Token const& token) -> Action {
-	if (m_force_ended) {
-		return Iterate::Pass;
-	}
-
-	if (m_expects_value) {
-		if (token.type == Token::Type::String) {
-			auto const ret = assign_value_to(*m_expects_value, token.lexeme, m_option_lexeme);
-			m_expects_value = {};
-			m_option_lexeme = {};
-			return or_iterate(ret, Iterate::Consume);
-		}
-
-		m_context.print_error(std::format("option '{}' requires an argument", m_option_lexeme));
-		return Result::create_early_exit(ExitCode::OptionRequiresArgument);
-	}
-
-	switch (token.type) {
-	case Token::Type::String: return Iterate::Pass;
-	case Token::Type::MinusMinus: m_force_ended = true; return Iterate::Consume;
-	case Token::Type::MinusMinusString: return parse_long(token);
-	case Token::Type::MinusString: return parse_shorts(token);
-	default: break;
-	}
-
-	m_context.print_error(std::format("InternalError: unexpected Token: '{}'", token.lexeme));
-	return Result::create_early_exit(ExitCode::InternalError);
-}
-
-auto OptionParserOld::finish() -> Result {
-	if (!m_expects_value) {
-		return Result::create_continue();
-	}
-	m_context.print_error(std::format("option '{}' requires an argument", m_option_lexeme));
-	return Result::create_early_exit(ExitCode::OptionRequiresArgument);
-}
-
-auto OptionParserOld::parse_long(Token const& token) -> Action {
-	auto const word = token.lexeme.substr(2);
-
-	if (word == "version" && m_context.has_version()) {
-		m_context.print_version();
-		return Result::create_early_exit(ExitCode::Success);
-	}
-
-	if (word == "help") {
-		m_context.print_help_text();
-		return Result::create_early_exit(ExitCode::Success);
-	}
-
-	auto const split = ArgSplit::create(word);
-	auto const* named = find_named(split.left);
-
-	if (!named) {
-		m_context.print_error(std::format("unrecognized option: '{}'", token.lexeme));
-		return Result::create_early_exit(ExitCode::UnrecognizedOption);
-	}
-
-	auto const ret = parse_option_value(*named, split.right, token.lexeme);
-	return or_iterate(ret, Iterate::Consume);
-}
-
-auto OptionParserOld::parse_shorts(Token const& token) -> Action {
-	auto const word = token.lexeme.substr(1);
-	auto const split = ArgSplit::create(word);
-	auto letters = split.left;
-	for (; letters.size() > 1; letters.remove_prefix(1)) {
-		auto const* named = find_named(letters.front());
-		if (!named) {
-			return Result::create_early_exit(ExitCode::UnrecognizedOption);
-		}
-
-		if (!named->is_flag) {
-			m_context.print_error(std::format("option requires an argument -- '{}'", named->letter));
-			return Result::create_early_exit(ExitCode::OptionRequiresArgument);
-		}
-
-		named->parse("true");
-	}
-
-	auto const* named = find_named(letters.front());
-	if (!named) {
-		return Result::create_early_exit(ExitCode::UnrecognizedOption);
-	}
-
-	auto const ret = parse_option_value(*named, split.right, token.lexeme);
-	return or_iterate(ret, Iterate::Consume);
-}
-
-auto OptionParserOld::parse_option_value(parameter::Named const& named,
-										 std::string_view const value,
-										 std::string_view const option_lexeme) -> Result {
-	if (!named.is_flag && value.empty()) {
-		m_expects_value = &named;
-		m_option_lexeme = option_lexeme;
-		return Result::create_continue();
-	}
-
-	if (!value.empty()) {
-		return assign_value_to(named, value, option_lexeme);
-	}
-
-	if (!named.is_flag) {
-		m_context.print_error(std::format("option '{}' requires an argument", option_lexeme));
-		return Result::create_early_exit(ExitCode::OptionRequiresArgument);
-	}
-
-	named.parse("true");
-	return Result::create_continue();
-}
-
-auto OptionParserOld::assign_value_to(parameter::Named const& named,
-									  std::string_view const value,
-									  std::string_view const option_lexeme) const -> Result {
-	if (!named.parse(value)) {
-		m_context.print_error(std::format("invalid '{}': {}", option_lexeme, value));
-		return Result::create_early_exit(ExitCode::InvalidArgument);
-	}
-
-	return Result::create_continue();
-}
-
-template <typename T>
-auto OptionParserOld::find_named(T const t) const -> parameter::Named const* {
-	auto const pred = [t](parameter::Named const& param) {
-		if constexpr (std::same_as<T, char>) {
-			return param.letter == t;
-		} else {
-			return param.word == t;
-		}
-	};
-	auto const it = std::ranges::find_if(m_options, pred);
-	if (it != m_options.end()) {
-		return &*it;
-	}
-
-	m_context.print_error(std::format("unrecognized option: '{}'", t));
-
-	return nullptr;
-}
 
 OptionParser::OptionParser(IContext& context, std::span<parameter::Named const> options)
 	: m_context(context),
@@ -444,7 +461,7 @@ ProgramEnvironment::ProgramEnvironment(ErrorPrinter const& printer,
 
 	this->commands.clear();
 	for (auto& command : commands) {
-		this->commands.push_back(CommandEnvironment{printer, std::move(command)});
+		this->commands.emplace_back(printer, std::move(command));
 	}
 }
 } // namespace clap::detail
@@ -567,14 +584,12 @@ void ParameterParser::parse_positional(parameter::Positional const& positional, 
 #pragma region ProgramParser
 
 namespace clap::detail {
-ProgramParser::ProgramParser(IContext& context, ProgramEnvironment const& environment)
-	: m_context(context),
-	  m_environment(environment) {}
+ProgramParser::ProgramParser(ProgramContext& context) : m_context(context) {}
 
 auto ProgramParser::parse(std::span<std::string_view const> args) -> Result {
 	auto scanner = Scanner{args};
 	try {
-		if (m_environment.commands.empty()) {
+		if (m_context.get_environment().commands.empty()) {
 			return parse_parameters(scanner);
 		}
 		return parse_commands(scanner);
@@ -584,7 +599,7 @@ auto ProgramParser::parse(std::span<std::string_view const> args) -> Result {
 }
 
 auto ProgramParser::parse_parameters(Scanner& scanner) -> Result {
-	auto parameter_parser = ParameterParser{m_context, m_environment.parameters};
+	auto parameter_parser = ParameterParser{m_context, m_context.get_environment().parameters};
 	return parameter_parser.parse(scanner);
 }
 
@@ -605,7 +620,7 @@ auto ProgramParser::parse_commands(Scanner& scanner) -> Result {
 }
 
 void ProgramParser::parse_program_options(Scanner& scanner) {
-	auto option_parser = OptionParser{m_context, m_environment.parameters.options};
+	auto option_parser = OptionParser{m_context, m_context.get_environment().parameters.options};
 	auto token = Token{};
 	while (scanner.scan_next(token)) {
 		auto const action = option_parser.parse_next(token);
@@ -621,7 +636,7 @@ void ProgramParser::parse_program_options(Scanner& scanner) {
 
 void ProgramParser::select_command() {
 	if (m_command_token.lexeme.empty()) {
-		if (m_environment.command_policy == CommandPolicy::Required) {
+		if (m_context.get_environment().command_policy == CommandPolicy::Required) {
 			auto const message = std::string{"missing required command"};
 			m_context.print_error(message);
 			throw ParseException{message, ExitCode::MissingRequiredCommand};
@@ -633,26 +648,23 @@ void ProgramParser::select_command() {
 	auto const pred = [this](CommandEnvironment const& entry) {
 		return entry.identifier == m_command_token.lexeme;
 	};
-	auto const it = std::ranges::find_if(m_environment.commands, pred);
-	if (it == m_environment.commands.end()) {
+	auto const it = std::ranges::find_if(m_context.get_environment().commands, pred);
+	if (it == m_context.get_environment().commands.end()) {
 		auto const message = std::format("unrecognized command: {}", m_command_token.lexeme);
 		m_context.print_error(message);
 		throw ParseException{message, ExitCode::UnrecognizedCommand};
 	}
 
 	m_selected_command = &*it;
+	m_context.set_selected_command(m_selected_command);
 }
 
 void ProgramParser::parse_command_parameters(Scanner& scanner) {
-	if (!m_selected_command) { // CommandPolicy is Optional.
-		auto const environment = ParameterEnvironment{};
-		ParameterParser{m_context, environment}.parse(scanner);
+	if (!m_selected_command) {	  // CommandPolicy is Optional.
+		assert(scanner.at_end()); // NOLINT(misc-static-assert)
 		return;
 	}
 
-	// TODO: context:
-	// - has_version() should return false
-	// - should print selected command's help text
 	auto parameter_parser = ParameterParser{m_context, m_selected_command->parameter_environment};
 	parameter_parser.parse(scanner);
 }

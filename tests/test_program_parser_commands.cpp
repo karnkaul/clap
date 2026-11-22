@@ -1,22 +1,27 @@
-import clap.parser;
+import clap.detail;
 
-#include "common.hpp"
 #include "klib/unit_test/unit_test.hpp"
 
 namespace clap::test {
 namespace {
-using detail::ProgramEnvironment;
+using detail::ProgramContext;
 using detail::ProgramParser;
+
+class MockPrinter : public IPrinter {
+  public:
+	void println([[maybe_unused]] std::string_view message) final {}
+	void printerr([[maybe_unused]] std::string_view message) final {}
+};
 
 struct Fixture {
 	auto parse(OptionList program_options, CommandList commands, std::string_view const expr) -> Result {
-		auto environment = ProgramEnvironment{{}, {}, std::move(program_options), std::move(commands), policy};
-		auto parser = ProgramParser{context, environment};
+		auto context = ProgramContext{{}, std::move(program_options), std::move(commands), policy, &printer};
+		auto parser = ProgramParser{context};
 		auto const words = to_words(expr);
 		return parser.parse(words);
 	}
 
-	MockContext context{};
+	MockPrinter printer{};
 	CommandPolicy policy{CommandPolicy::Required};
 };
 
@@ -121,19 +126,16 @@ TEST_CASE(program_parser_commands_missing_program_option_value) {
 }
 
 TEST_CASE(program_parser_reparse) {
-	auto context = MockContext{};
+	auto printer = MockPrinter{};
 	auto arg = std::string_view{};
-	auto environment = ProgramEnvironment{
-		{},
-		{},
-		{},
-		{
-			command("run", {positional_required(arg, "ARG")}),
-		},
-		CommandPolicy::Required,
-	};
-
-	auto parser = ProgramParser{context, environment};
+	auto context = ProgramContext{{},
+								  {},
+								  {
+									  command("run", {positional_required(arg, "ARG")}),
+								  },
+								  CommandPolicy::Required,
+								  &printer};
+	auto parser = ProgramParser{context};
 
 	auto words = to_words("run first");
 	auto result = parser.parse(words);

@@ -2,19 +2,17 @@ module clap.parser;
 
 namespace clap {
 Parser::Parser(spec::Parameters parameters)
-	: m_context(parameters.program, parameters.custom_printer),
-	  m_environment(m_context.get_error_printer(), parameters.program, std::move(parameters.parameters), {}, {}) {}
+	: m_context(parameters.program, std::move(parameters.parameters), {}, {}, parameters.custom_printer) {}
 
 Parser::Parser(spec::Commands commands)
-	: m_context(commands.program, commands.custom_printer),
-	  m_environment(m_context.get_error_printer(),
-					commands.program,
-					std::move(commands.options),
-					std::move(commands.commands),
-					commands.policy) {}
+	: m_context(commands.program,
+				std::move(commands.options),
+				std::move(commands.commands),
+				commands.policy,
+				commands.custom_printer) {}
 
 auto Parser::parse_args(std::span<std::string_view const> args) -> Result {
-	auto program_parser = detail::ProgramParser{m_context, m_environment};
+	auto program_parser = detail::ProgramParser{m_context};
 	return program_parser.parse(args);
 }
 } // namespace clap

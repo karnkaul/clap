@@ -16,6 +16,8 @@ class Scanner {
 
 	explicit Scanner(std::span<std::string_view const> words);
 
+	[[nodiscard]] auto at_end() const -> bool { return m_current.empty(); }
+
 	auto scan_next(Token& out) -> bool;
 
   private:

@@ -12,6 +12,5 @@ class Parser {
 
   private:
 	detail::ProgramContext m_context;
-	detail::ProgramEnvironment m_environment;
 };
 } // namespace clap

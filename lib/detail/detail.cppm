@@ -32,29 +32,6 @@ class ErrorPrinter {
 	std::string_view command_identifier{};
 };
 
-class ProgramContext : public IContext {
-  public:
-	explicit ProgramContext(Program const& program, IPrinter* custom_printer);
-
-	void print_help_text() override;
-	[[nodiscard]] auto has_version() const -> bool override;
-	void print_version() override;
-
-	void print_error(std::string_view message) override { get_error_printer().print_error(message); }
-
-	[[nodiscard]] auto get_error_printer() const -> ErrorPrinter const& { return m_error_printer; }
-
-	void set_command_identifier(std::string_view identifier);
-
-  private:
-	ErrorPrinter m_error_printer{};
-	std::string_view m_version{};
-	std::string_view m_description{};
-	IPrinter* m_printer{};
-
-	std::string_view m_command_identifier{};
-};
-
 class ParameterEnvironment {
   public:
 	struct Arguments {
@@ -97,43 +74,35 @@ class ProgramEnvironment {
 	CommandPolicy command_policy;
 };
 
-class OptionParserOld {
+class ProgramContext : public IContext {
   public:
-	using Token = ScannerToken;
+	explicit ProgramContext(Program const& program,
+							std::variant<ParameterList, OptionList> program_parameters,
+							CommandList commands,
+							CommandPolicy command_policy,
+							IPrinter* custom_printer);
 
-	enum class Iterate : std::int8_t { Consume, Pass };
+	void print_help_text() override;
+	[[nodiscard]] auto has_version() const -> bool override;
+	void print_version() override;
 
-	using Action = std::variant<Iterate, Result>;
+	void print_error(std::string_view message) override { get_error_printer().print_error(message); }
 
-	explicit OptionParserOld(IContext& context, std::span<parameter::Named const> options);
+	[[nodiscard]] auto get_error_printer() const -> ErrorPrinter const& { return m_error_printer; }
+	[[nodiscard]] auto get_environment() const -> ProgramEnvironment const& { return m_environment; }
 
-	[[nodiscard]] auto parse_next(Token const& token) -> Action;
-	[[nodiscard]] auto finish() -> Result;
+	[[nodiscard]] auto help_text_parameters() const -> std::string;
+	[[nodiscard]] auto help_text_commands() const -> std::string;
+	[[nodiscard]] auto help_text() const -> std::string;
 
-	[[nodiscard]] auto parse_next2(Token const& token) noexcept(false) -> Iterate;
-	void finish2() noexcept(false);
+	void set_selected_command(CommandEnvironment const* command_enviroment);
 
   private:
-	[[nodiscard]] auto parse_long(Token const& token) -> Action;
-	[[nodiscard]] auto parse_shorts(Token const& token) -> Action;
+	ErrorPrinter m_error_printer;
+	ProgramEnvironment m_environment;
+	IPrinter* m_printer{};
 
-	[[nodiscard]] auto
-	parse_option_value(parameter::Named const& named, std::string_view value, std::string_view option_lexeme) -> Result;
-
-	[[nodiscard]] auto assign_value_to(parameter::Named const& named,
-									   std::string_view value,
-									   std::string_view option_lexeme) const -> Result;
-
-	template <typename T>
-	[[nodiscard]] auto find_named(T t) const -> parameter::Named const*;
-
-	IContext& m_context;
-
-	std::span<parameter::Named const> m_options{};
-
-	bool m_force_ended{};
-	parameter::Named const* m_expects_value{};
-	std::string_view m_option_lexeme{};
+	CommandEnvironment const* m_selected_command{};
 };
 
 class OptionParser {
@@ -193,7 +162,7 @@ class ParameterParser {
 
 class ProgramParser {
   public:
-	explicit ProgramParser(IContext& context, ProgramEnvironment const& environment);
+	explicit ProgramParser(ProgramContext& context);
 
 	auto parse(std::span<std::string_view const> args) -> Result;
 
@@ -208,8 +177,7 @@ class ProgramParser {
 	void select_command();
 	void parse_command_parameters(Scanner& scanner);
 
-	IContext& m_context;
-	ProgramEnvironment const& m_environment;
+	ProgramContext& m_context;
 
 	Token m_command_token{};
 	CommandEnvironment const* m_selected_command{};
