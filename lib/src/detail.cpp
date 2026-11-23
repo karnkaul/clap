@@ -237,6 +237,15 @@ auto ProgramContext::help_text() const -> std::string {
 	return help_text_parameters();
 }
 
+void ProgramContext::fixup_program_name(std::string_view const arg0) {
+	if (!m_environment.program_name.empty() || arg0.empty()) {
+		return;
+	}
+
+	m_program_name = to_program_name(arg0);
+	m_environment.program_name = m_program_name;
+}
+
 void ProgramContext::set_selected_command(CommandEnvironment const* command_enviroment) {
 	m_selected_command = command_enviroment;
 	if (m_selected_command) {
@@ -619,8 +628,8 @@ void ParameterParser::parse_positional(parameter::Positional const& positional, 
 namespace clap::detail {
 ProgramParser::ProgramParser(ProgramContext& context) : m_context(context) {}
 
-auto ProgramParser::parse(std::span<std::string_view const> args) -> Result {
-	auto scanner = Scanner{args};
+auto ProgramParser::parse(std::span<std::string_view const> words) -> Result {
+	auto scanner = Scanner{words};
 	try {
 		if (m_context.get_environment().commands.empty()) {
 			return parse_parameters(scanner);

@@ -78,6 +78,15 @@ auto clap::to_words(std::string_view const line) -> std::vector<std::string_view
 	return ret;
 }
 
+auto clap::to_words(std::span<char const* const> args) -> std::vector<std::string_view> {
+	auto ret = std::vector<std::string_view>{};
+	ret.reserve(args.size());
+	for (auto const* arg : args) {
+		ret.emplace_back(arg);
+	}
+	return ret;
+}
+
 auto clap::or_default(IPrinter* custom_printer) -> IPrinter& {
 	if (custom_printer) {
 		return *custom_printer;

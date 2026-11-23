@@ -100,6 +100,8 @@ class ProgramContext : public IContext {
 	[[nodiscard]] auto help_text_commands() const -> std::string;
 	[[nodiscard]] auto help_text() const -> std::string;
 
+	void fixup_program_name(std::string_view arg0);
+
 	void set_selected_command(CommandEnvironment const* command_enviroment);
 	void reset_environment();
 
@@ -108,6 +110,7 @@ class ProgramContext : public IContext {
 	ProgramEnvironment m_environment;
 	IPrinter* m_printer{};
 
+	std::string m_program_name{};
 	CommandEnvironment const* m_selected_command{};
 };
 
@@ -170,7 +173,7 @@ class ProgramParser {
   public:
 	explicit ProgramParser(ProgramContext& context);
 
-	[[nodiscard]] auto parse(std::span<std::string_view const> args) -> Result;
+	[[nodiscard]] auto parse(std::span<std::string_view const> words) -> Result;
 
   private:
 	using Token = ScannerToken;

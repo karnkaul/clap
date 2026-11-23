@@ -4,49 +4,26 @@ import clap.parser;
 
 namespace clap {
 namespace {
-void fixup_program_name(Specification& out_spec, std::string& out_buf, std::string_view const arg0) {
-	if (arg0.empty()) {
-		return;
-	}
-
-	auto const visitor = [&](auto& spec) {
-		if (!spec.program.name.empty()) {
-			return;
-		}
-
-		out_buf = to_program_name(arg0);
-		spec.program.name = out_buf;
+[[nodiscard]] auto create_parser(Specification spec) {
+	auto const visitor = [](auto t) {
+		return Parser{std::move(t)};
 	};
-	std::visit(visitor, out_spec);
+	return std::visit(visitor, std::move(spec));
 }
 } // namespace
 } // namespace clap
 
-auto clap::parse_args(Specification spec, std::span<std::string_view const> args) -> Result {
-	auto const visitor = Visitor{
-		[](spec::Parameters parameters) {
-			return Parser{std::move(parameters)};
-		},
-		[](spec::Commands commands) {
-			return Parser{std::move(commands)};
-		},
-	};
-	auto parser = std::visit(visitor, std::move(spec));
-	return parser.parse_args(args);
+auto clap::parse_words(Specification spec, std::span<std::string_view const> words) -> Result {
+	auto parser = create_parser(std::move(spec));
+	return parser.parse_words(words);
 }
 
-auto clap::parse_main(Specification spec, int const argc, char const* const* argv) -> Result {
-	auto args = std::span{argv, static_cast<std::size_t>(argc)};
-	auto program_name = std::string{};
-	if (!args.empty()) {
-		fixup_program_name(spec, program_name, args.front());
-		args = args.subspan(1);
-	}
+auto clap::parse_main(Specification spec, int const argc, char const* const* argv, bool const skip_argv_0) -> Result {
+	auto parser = create_parser(std::move(spec));
+	return parser.parse_main(argc, argv, skip_argv_0);
+}
 
-	auto words = std::vector<std::string_view>{};
-	words.reserve(args.size());
-	for (auto const* arg : args) {
-		words.emplace_back(arg);
-	}
-	return parse_args(std::move(spec), words);
+auto clap::parse_line(Specification spec, std::string_view const line) -> Result {
+	auto parser = create_parser(std::move(spec));
+	return parser.parse_line(line);
 }

@@ -105,6 +105,7 @@ struct Program {
 /// \returns Whitespace-stripped list of words.
 /// Supports quoted strings.
 [[nodiscard]] auto to_words(std::string_view line) -> std::vector<std::string_view>;
+[[nodiscard]] auto to_words(std::span<char const* const> args) -> std::vector<std::string_view>;
 
 [[nodiscard]] auto or_default(IPrinter* custom_printer) -> IPrinter&;
 
