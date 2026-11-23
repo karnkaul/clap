@@ -3,16 +3,8 @@ import clap;
 namespace {
 namespace fs = std::filesystem;
 
-class ICommand {
+class ICommand : public clap::Polymorphic {
   public:
-	virtual ~ICommand() = default;
-
-	ICommand() = default;
-	ICommand(ICommand const&) = default;
-	ICommand(ICommand&&) = default;
-	ICommand& operator=(ICommand const&) = default;
-	ICommand& operator=(ICommand&&) = default;
-
 	[[nodiscard]] virtual auto get_identifier() const -> std::string_view = 0;
 	[[nodiscard]] virtual auto get_description() const -> std::string_view = 0;
 	[[nodiscard]] virtual auto get_parameters() -> clap::ParameterList = 0;
@@ -75,7 +67,7 @@ class Pow : public ICommand {
 		return {
 			clap::named_flag(m_verbose, "v,verbose", "print entire expression"),
 			clap::positional_required(m_var, "VAR", "variable to raise"),
-			clap::positional_optional(m_exp, "EXP (2)", "exponent to raise to"),
+			clap::positional_optional(m_exp, "EXP", "exponent to raise to (2)"),
 		};
 	}
 
@@ -113,8 +105,7 @@ class App {
 			spec.commands.push_back(
 				clap::command(command->get_identifier(), command->get_parameters(), command->get_description()));
 		}
-		auto parser = clap::Parser{std::move(spec)};
-		auto const result = parser.parse_main(argc, argv);
+		auto const result = clap::parse_main(std::move(spec), argc, argv);
 		if (result.should_early_exit()) {
 			return result.return_code();
 		}

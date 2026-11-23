@@ -16,8 +16,7 @@ namespace {
 		clap::positional_required(input, "NUM", "integer to square"),
 	};
 
-	auto parser = clap::Parser{std::move(spec)};
-	auto const result = parser.parse_main(argc, argv);
+	auto const result = clap::parse_main(std::move(spec), argc, argv);
 	if (result.should_early_exit()) {
 		return result.return_code();
 	}

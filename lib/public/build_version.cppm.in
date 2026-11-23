@@ -3,5 +3,5 @@ export module clap.build_version;
 export import std;
 
 export namespace clap {
-constexpr auto build_version_v = std::string_view{"@PROJECT_VERSION@"};
+constexpr auto build_version_v = std::string_view{"v@PROJECT_VERSION@"};
 } // namespace clap

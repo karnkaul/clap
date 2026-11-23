@@ -11,7 +11,7 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_DEBUG_POSTFIX "-d")
 
 set(package_name clap)
-project(${package_name} VERSION "0.1.3")
+project(${package_name} VERSION "0.2.1")
 
 option(CLAP_BUILD_EXAMPLES "Build clap examples" ${PROJECT_IS_TOP_LEVEL})
 option(CLAP_BUILD_TESTS "Build clap tests" ${PROJECT_IS_TOP_LEVEL})

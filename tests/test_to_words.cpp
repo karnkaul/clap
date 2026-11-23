@@ -1,4 +1,4 @@
-import clap;
+import clap.types;
 
 #include "klib/unit_test/unit_test.hpp"
 
