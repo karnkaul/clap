@@ -140,6 +140,23 @@ struct Joiner {
 
 	std::string text{};
 };
+
+template <typename T>
+void reset_parses(T const& params) {
+	for (auto& param : params) {
+		if (param.parse.was_set) {
+			*param.parse.was_set = false;
+		}
+	}
+}
+
+void reset_parses(ParameterEnvironment::Arguments& arguments) {
+	reset_parses(arguments.pre_list);
+	reset_parses(arguments.post_list);
+	if (arguments.list) {
+		reset_parses(std::span{&*arguments.list, 1});
+	}
+}
 } // namespace
 
 ProgramContext::ProgramContext(Program const& program,
@@ -153,10 +170,10 @@ ProgramContext::ProgramContext(Program const& program,
 
 void ProgramContext::print_help_text() { m_printer->println(help_text()); }
 
-auto ProgramContext::has_version() const -> bool { return !m_environment.version.empty(); }
+auto ProgramContext::has_version() const -> bool { return !m_selected_command && !m_environment.version.empty(); }
 
 void ProgramContext::print_version() {
-	if (m_environment.version.empty()) {
+	if (!has_version()) {
 		return;
 	}
 
@@ -224,8 +241,13 @@ void ProgramContext::set_selected_command(CommandEnvironment const* command_envi
 	m_selected_command = command_enviroment;
 	if (m_selected_command) {
 		m_error_printer.command_identifier = m_selected_command->identifier;
-		m_environment.version = {};
 	}
+}
+
+void ProgramContext::reset_environment() {
+	m_selected_command = nullptr;
+	m_error_printer.command_identifier = {};
+	m_environment.reset_parse_states();
 }
 } // namespace clap::detail
 
@@ -433,11 +455,17 @@ ParameterEnvironment::ParameterEnvironment(ErrorPrinter const& printer, Paramete
 	}
 }
 
+void ParameterEnvironment::reset_parse_states() {
+	reset_parses(arguments);
+	reset_parses(options);
+}
+
 CommandEnvironment::CommandEnvironment(ErrorPrinter const& printer, Command command)
 	: identifier(command.identifier),
 	  description(command.description),
-	  epilogue(command.epilogue),
 	  parameter_environment(printer, std::move(command.parameters)) {}
+
+void CommandEnvironment::reset_parse_states() { parameter_environment.reset_parse_states(); }
 
 ProgramEnvironment::ProgramEnvironment(ErrorPrinter const& printer,
 									   Program const& program,
@@ -464,6 +492,13 @@ ProgramEnvironment::ProgramEnvironment(ErrorPrinter const& printer,
 		this->commands.emplace_back(printer, std::move(command));
 	}
 }
+
+void ProgramEnvironment::reset_parse_states() {
+	parameters.reset_parse_states();
+	for (auto& command : commands) {
+		command.reset_parse_states();
+	}
+}
 } // namespace clap::detail
 
 #pragma endregion
@@ -482,22 +517,20 @@ auto ParameterParser::parse(Scanner& scanner) -> Result {
 	auto option_parser = OptionParser{m_context, m_environment.options};
 	auto token = Token{};
 
-	try {
-		while (scanner.scan_next(token)) {
-			auto const action = option_parser.parse_next(token);
-			if (action == Iterate::Pass) {
-				m_argument_tokens.push_back(token);
-			}
+	while (scanner.scan_next(token)) {
+		auto const action = option_parser.parse_next(token);
+		switch (action) {
+		case Iterate::Pass: m_argument_tokens.push_back(token); break;
+		case Iterate::Consume: break;
+		case Iterate::EarlyExit: return Result::create_early_exit(ExitCode::Success);
 		}
-
-		option_parser.finish();
-
-		parse_arguments();
-
-		return Result::create_continue();
-	} catch (ParseException const& e) {
-		return Result{e.get_exit_code(), Outcome::EarlyExit, {}};
 	}
+
+	option_parser.finish();
+
+	parse_arguments();
+
+	return Result::create_continue();
 }
 
 void ParameterParser::parse_arguments() {
@@ -607,10 +640,16 @@ auto ProgramParser::parse_commands(Scanner& scanner) -> Result {
 	m_command_token = {};
 	m_selected_command = {};
 
-	parse_program_options(scanner);
+	auto result = parse_program_options(scanner);
+	if (result.should_early_exit()) {
+		return result;
+	}
 
 	select_command();
-	parse_command_parameters(scanner);
+	result = parse_command_parameters(scanner);
+	if (result.should_early_exit()) {
+		return result;
+	}
 
 	if (!m_selected_command) {
 		return Result::create_continue();
@@ -619,7 +658,7 @@ auto ProgramParser::parse_commands(Scanner& scanner) -> Result {
 	return Result{ExitCode::Success, Outcome::Continue, m_selected_command->identifier};
 }
 
-void ProgramParser::parse_program_options(Scanner& scanner) {
+auto ProgramParser::parse_program_options(Scanner& scanner) -> Result {
 	auto option_parser = OptionParser{m_context, m_context.get_environment().parameters.options};
 	auto token = Token{};
 	while (scanner.scan_next(token)) {
@@ -629,9 +668,14 @@ void ProgramParser::parse_program_options(Scanner& scanner) {
 			m_command_token = token;
 			break;
 		}
+
+		if (action == Iterate::EarlyExit) {
+			return Result::create_early_exit(ExitCode::Success);
+		}
 	}
 
 	option_parser.finish();
+	return Result::create_continue();
 }
 
 void ProgramParser::select_command() {
@@ -659,14 +703,14 @@ void ProgramParser::select_command() {
 	m_context.set_selected_command(m_selected_command);
 }
 
-void ProgramParser::parse_command_parameters(Scanner& scanner) {
+auto ProgramParser::parse_command_parameters(Scanner& scanner) -> Result {
 	if (!m_selected_command) {	  // CommandPolicy is Optional.
 		assert(scanner.at_end()); // NOLINT(misc-static-assert)
-		return;
+		return Result::create_continue();
 	}
 
 	auto parameter_parser = ParameterParser{m_context, m_selected_command->parameter_environment};
-	parameter_parser.parse(scanner);
+	return parameter_parser.parse(scanner);
 }
 } // namespace clap::detail
 

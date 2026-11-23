@@ -12,6 +12,7 @@ Parser::Parser(spec::Commands commands)
 				commands.custom_printer) {}
 
 auto Parser::parse_args(std::span<std::string_view const> args) -> Result {
+	m_context.reset_environment();
 	auto program_parser = detail::ProgramParser{m_context};
 	return program_parser.parse(args);
 }

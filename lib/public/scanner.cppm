@@ -16,7 +16,7 @@ class Scanner {
 
 	explicit Scanner(std::span<std::string_view const> words);
 
-	[[nodiscard]] auto at_end() const -> bool { return m_current.empty(); }
+	[[nodiscard]] auto at_end() const -> bool { return !m_has_current; }
 
 	auto scan_next(Token& out) -> bool;
 
@@ -30,5 +30,6 @@ class Scanner {
 
 	std::span<std::string_view const> m_remain{};
 	std::string_view m_current{};
+	bool m_has_current{};
 };
 } // namespace clap

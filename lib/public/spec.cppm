@@ -131,19 +131,14 @@ using OptionList = std::vector<parameter::Named>;
 
 /// \brief Command with its own ParameterList.
 struct Command {
-	explicit Command(std::string_view identifier,
-					 ParameterList parameters,
-					 std::string_view description,
-					 std::string_view epilogue)
+	explicit Command(std::string_view identifier, ParameterList parameters, std::string_view description)
 		: identifier(identifier),
 		  description(description),
-		  parameters(std::move(parameters)),
-		  epilogue(epilogue) {}
+		  parameters(std::move(parameters)) {}
 
 	std::string_view identifier;
 	std::string_view description;
 	ParameterList parameters;
-	std::string_view epilogue;
 };
 using CommandList = std::vector<Command>;
 
@@ -169,7 +164,7 @@ positional_required(T& out, std::string_view const name, std::string_view const 
 }
 
 /// \returns Optional parameter::Positional with bound value.
-/// Only one optional or list parameter can be present, and as the last positional parameter.
+/// Required positionals must precede all optional positionals. At most one list parameter may also be specified.
 template <parameter::ValueT T>
 [[nodiscard]] auto
 positional_optional(T& out, std::string_view const name, std::string_view const description = {}, bool* was_set = {}) {
@@ -177,7 +172,8 @@ positional_optional(T& out, std::string_view const name, std::string_view const 
 }
 
 /// \returns parameter::List with bound vector of values.
-/// Only one list or optional parameter can be present, and as the last positional parameter.
+/// At most one list parameter is permitted. It may coexist with optional positionals; required positionals must
+/// precede optional positionals.
 template <parameter::ValueT T>
 [[nodiscard]] auto positional_list(std::vector<T>& out,
 								   std::string_view const name,
@@ -187,11 +183,9 @@ template <parameter::ValueT T>
 }
 
 /// \returns Command.
-[[nodiscard]] auto command(std::string_view identifier,
-						   ParameterList parameters,
-						   std::string_view description = {},
-						   std::string_view epilogue = {}) -> Command {
-	return Command{identifier, std::move(parameters), description, epilogue};
+[[nodiscard]] auto command(std::string_view identifier, ParameterList parameters, std::string_view description = {})
+	-> Command {
+	return Command{identifier, std::move(parameters), description};
 }
 
 namespace spec {

@@ -44,6 +44,8 @@ class ParameterEnvironment {
 
 	explicit ParameterEnvironment(ErrorPrinter const& printer, ParameterList parameters) noexcept(false);
 
+	void reset_parse_states();
+
 	std::vector<parameter::Named> options;
 	Arguments arguments;
 };
@@ -52,9 +54,10 @@ class CommandEnvironment {
   public:
 	explicit CommandEnvironment(ErrorPrinter const& printer, Command command) noexcept(false);
 
+	void reset_parse_states();
+
 	std::string_view identifier;
 	std::string_view description;
-	std::string_view epilogue;
 	ParameterEnvironment parameter_environment;
 };
 
@@ -65,6 +68,8 @@ class ProgramEnvironment {
 								std::variant<ParameterList, OptionList> program_parameters,
 								CommandList commands,
 								CommandPolicy command_policy);
+
+	void reset_parse_states();
 
 	std::string_view program_name;
 	std::string_view version;
@@ -96,6 +101,7 @@ class ProgramContext : public IContext {
 	[[nodiscard]] auto help_text() const -> std::string;
 
 	void set_selected_command(CommandEnvironment const* command_enviroment);
+	void reset_environment();
 
   private:
 	ErrorPrinter m_error_printer;
@@ -139,7 +145,7 @@ class ParameterParser {
   public:
 	explicit ParameterParser(IContext& context, ParameterEnvironment const& environment);
 
-	auto parse(Scanner& scanner) -> Result;
+	[[nodiscard]] auto parse(Scanner& scanner) noexcept(false) -> Result;
 
   private:
 	using Token = ScannerToken;
@@ -164,18 +170,18 @@ class ProgramParser {
   public:
 	explicit ProgramParser(ProgramContext& context);
 
-	auto parse(std::span<std::string_view const> args) -> Result;
+	[[nodiscard]] auto parse(std::span<std::string_view const> args) -> Result;
 
   private:
 	using Token = ScannerToken;
 	using Iterate = OptionParser::Iterate;
 
-	auto parse_parameters(Scanner& scanner) -> Result;
-	auto parse_commands(Scanner& scanner) -> Result;
+	[[nodiscard]] auto parse_parameters(Scanner& scanner) -> Result;
+	[[nodiscard]] auto parse_commands(Scanner& scanner) -> Result;
 
-	void parse_program_options(Scanner& scanner);
+	[[nodiscard]] auto parse_program_options(Scanner& scanner) -> Result;
 	void select_command();
-	void parse_command_parameters(Scanner& scanner);
+	[[nodiscard]] auto parse_command_parameters(Scanner& scanner) -> Result;
 
 	ProgramContext& m_context;
 

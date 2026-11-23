@@ -33,6 +33,50 @@ TEST_CASE(scanner_strings) {
 	EXPECT(token.type == Token::Type::Eof);
 }
 
+TEST_CASE(scanner_empty_argument) {
+	static constexpr auto words = std::array{""sv};
+	auto scanner = Scanner{words};
+	auto token = Token{};
+
+	EXPECT(!scanner.at_end());
+	EXPECT(scanner.scan_next(token));
+	EXPECT(token.type == Token::Type::String);
+	EXPECT(token.lexeme.empty());
+	EXPECT(scanner.at_end());
+	EXPECT(!scanner.scan_next(token));
+	EXPECT(token.type == Token::Type::Eof);
+}
+
+TEST_CASE(scanner_empty_argument_between_words) {
+	static constexpr auto words = std::array{"before"sv, ""sv, "after"sv};
+	auto scanner = Scanner{words};
+	auto token = Token{};
+
+	EXPECT(scanner.scan_next(token));
+	EXPECT(token.lexeme == "before");
+	EXPECT(scanner.scan_next(token));
+	EXPECT(token.type == Token::Type::String);
+	EXPECT(token.lexeme.empty());
+	EXPECT(scanner.scan_next(token));
+	EXPECT(token.lexeme == "after");
+	EXPECT(!scanner.scan_next(token));
+	EXPECT(token.type == Token::Type::Eof);
+}
+
+TEST_CASE(scanner_trailing_empty_argument) {
+	static constexpr auto words = std::array{"before"sv, ""sv};
+	auto scanner = Scanner{words};
+	auto token = Token{};
+
+	EXPECT(scanner.scan_next(token));
+	EXPECT(token.lexeme == "before");
+	EXPECT(scanner.scan_next(token));
+	EXPECT(token.type == Token::Type::String);
+	EXPECT(token.lexeme.empty());
+	EXPECT(!scanner.scan_next(token));
+	EXPECT(token.type == Token::Type::Eof);
+}
+
 TEST_CASE(scanner_mm_string) {
 	static constexpr auto words = std::array{
 		"--foo"sv,

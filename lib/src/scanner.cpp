@@ -42,10 +42,12 @@ auto Scanner::scan_quoted() -> Token {
 void Scanner::advance() {
 	if (m_remain.empty()) {
 		m_current = {};
+		m_has_current = false;
 		return;
 	}
 	m_current = m_remain.front();
 	m_remain = m_remain.subspan(1);
+	m_has_current = true;
 }
 
 auto Scanner::to_token(Token::Type const type, std::size_t length) -> Token {

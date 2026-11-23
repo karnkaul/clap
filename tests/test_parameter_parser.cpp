@@ -7,6 +7,7 @@ namespace clap::test {
 namespace {
 using detail::ParameterEnvironment;
 using detail::ParameterParser;
+using detail::ParseException;
 
 class Fixture {
   public:
@@ -129,31 +130,6 @@ TEST_CASE(parameter_parser_multiple_options_args) {
 	EXPECT(post == "post");
 }
 
-TEST_CASE(parameter_parser_missing_option_value) {
-	auto fixture = Fixture{};
-	auto i32 = int{};
-	auto result = fixture.parse(
-		{
-			named_option(i32, "i"),
-		},
-		"-i");
-	EXPECT(result.exit_code() == ExitCode::OptionRequiresArgument);
-}
-
-TEST_CASE(parameter_parser_invalid_positional_stops_remaining_positionals) {
-	auto fixture = Fixture{};
-	auto number = int{};
-	auto post = std::string_view{};
-	auto result = fixture.parse(
-		{
-			positional_required(number, "NUMBER"),
-			positional_required(post, "POST"),
-		},
-		"not-a-number should-not-be-assigned");
-	EXPECT(result.exit_code() == ExitCode::InvalidArgument);
-	EXPECT(post.empty());
-}
-
 TEST_CASE(parameter_parser_reparse_clears_previous_arguments) {
 	auto fixture = Fixture{};
 	auto arg = std::string_view{};
@@ -175,16 +151,61 @@ TEST_CASE(parameter_parser_reparse_clears_previous_arguments) {
 	EXPECT(arg == "second");
 }
 
+TEST_CASE(parameter_parser_missing_option_value) {
+	auto fixture = Fixture{};
+	auto i32 = int{};
+	auto exit_code = ExitCode{};
+	try {
+		auto const _ = fixture.parse(
+			{
+				named_option(i32, "i"),
+			},
+			"-i");
+	} catch (ParseException const& e) {
+		exit_code = e.get_exit_code();
+	}
+	EXPECT(exit_code == ExitCode::OptionRequiresArgument);
+}
+
+TEST_CASE(parameter_parser_invalid_positional_stops_remaining_positionals) {
+	auto fixture = Fixture{};
+	auto number = int{};
+	auto post = std::string_view{};
+	auto exit_code = ExitCode{};
+	try {
+		auto const _ = fixture.parse(
+			{
+				positional_required(number, "NUMBER"),
+				positional_required(post, "POST"),
+			},
+			"not-a-number should-not-be-assigned");
+	} catch (ParseException const& e) {
+		exit_code = e.get_exit_code();
+	}
+	EXPECT(exit_code == ExitCode::InvalidArgument);
+	EXPECT(post.empty());
+}
+
 TEST_CASE(parameter_parser_unknown_arg) {
 	auto fixture = Fixture{};
-	auto result = fixture.parse({}, "foo");
-	EXPECT(result.exit_code() == ExitCode::UnknownArgument);
+	auto exit_code = ExitCode::Success;
+	try {
+		auto const _ = fixture.parse({}, "foo");
+	} catch (ParseException const& e) {
+		exit_code = e.get_exit_code();
+	}
+	EXPECT(exit_code == ExitCode::UnknownArgument);
 }
 
 TEST_CASE(parameter_parser_urecognized_option) {
 	auto fixture = Fixture{};
-	auto const result = fixture.parse({}, "--foo");
-	EXPECT(result.exit_code() == ExitCode::UnrecognizedOption);
+	auto exit_code = ExitCode::Success;
+	try {
+		auto const _ = fixture.parse({}, "--foo");
+	} catch (ParseException const& e) {
+		exit_code = e.get_exit_code();
+	}
+	EXPECT(exit_code == ExitCode::UnrecognizedOption);
 }
 } // namespace
 } // namespace clap::test
