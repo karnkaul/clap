@@ -4,6 +4,7 @@ import clap.detail;
 
 namespace clap::test {
 namespace {
+using detail::InvalidParameterException;
 using detail::ParameterEnvironment;
 
 TEST_CASE(parameter_environment_invalid_positionals) {

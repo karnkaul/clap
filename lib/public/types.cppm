@@ -3,6 +3,7 @@ export module clap.types;
 export import std;
 
 export namespace clap {
+/// \brief Exit code. Applicable with clap::Outcome::EarlyExit.
 enum class ExitCode : std::int8_t {
 	Success = 0,
 	Failure = 1,
@@ -20,20 +21,33 @@ enum class ExitCode : std::int8_t {
 	InternalError = 20,
 };
 
+/// \brief Whether to continue execution or exit early.
+/// Parse errors and printing help/version yield clap::Outcome::EarlyExit.
 enum class Outcome : std::int8_t { Continue, EarlyExit };
 
+/// \brief Whether a selected command is required to be parsed.
 enum class CommandPolicy : std::int8_t { Required, Optional };
 
-template <typename... Ts>
-struct Visitor : Ts... {
-	using Ts::operator()...;
+/// \brief Base polymorphic type.
+class Polymorphic {
+  public:
+	virtual ~Polymorphic() = default;
+
+	Polymorphic() = default;
+	Polymorphic(Polymorphic const&) = default;
+	Polymorphic(Polymorphic&&) = default;
+	Polymorphic& operator=(Polymorphic const&) = default;
+	Polymorphic& operator=(Polymorphic&&) = default;
 };
 
+/// \brief Type representing the result of parsing.
+/// Stores Outcome, ExitCode, and the selected command identifier, if any.
 class Result {
   public:
 	[[nodiscard]] static constexpr auto create_early_exit(ExitCode const exit_code) -> Result {
 		return Result{exit_code, Outcome::EarlyExit, {}};
 	}
+
 	[[nodiscard]] static constexpr auto create_continue() -> Result {
 		return Result{ExitCode::Success, Outcome::Continue, {}};
 	}
@@ -66,22 +80,7 @@ class Result {
 	std::string_view m_command_identifier{};
 };
 
-class InvalidParameterException : public std::runtime_error {
-  public:
-	using std::runtime_error::runtime_error;
-};
-
-class Polymorphic {
-  public:
-	virtual ~Polymorphic() = default;
-
-	Polymorphic() = default;
-	Polymorphic(Polymorphic const&) = default;
-	Polymorphic(Polymorphic&&) = default;
-	Polymorphic& operator=(Polymorphic const&) = default;
-	Polymorphic& operator=(Polymorphic&&) = default;
-};
-
+/// \brief Interface for printing output.
 class IPrinter : public Polymorphic {
   public:
 	virtual void println(std::string_view message) = 0;
@@ -94,6 +93,7 @@ class DefaultPrinter : public IPrinter {
 	void printerr(std::string_view const message) override { std::println(std::cerr, "{}", message); }
 };
 
+/// \brief Program information.
 struct Program {
 	std::string_view name{};
 	std::string_view version{};
@@ -107,6 +107,7 @@ struct Program {
 [[nodiscard]] auto to_words(std::string_view line) -> std::vector<std::string_view>;
 [[nodiscard]] auto to_words(std::span<char const* const> args) -> std::vector<std::string_view>;
 
+/// \brief Returns reference to passed custom_printer or a clap::DefaultPrinter.
 [[nodiscard]] auto or_default(IPrinter* custom_printer) -> IPrinter&;
 
 [[nodiscard]] constexpr auto strip_quotes(std::string_view in) {

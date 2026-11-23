@@ -3,6 +3,16 @@ export module clap.detail;
 export import clap.spec;
 
 export namespace clap::detail {
+template <typename... Ts>
+struct Visitor : Ts... {
+	using Ts::operator()...;
+};
+
+class InvalidParameterException : public std::runtime_error {
+  public:
+	using std::runtime_error::runtime_error;
+};
+
 struct ScannerToken {
 	enum class Type : std::int8_t { Eof, String, MinusString, MinusMinusString, MinusMinus };
 
