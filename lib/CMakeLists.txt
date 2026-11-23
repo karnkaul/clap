@@ -17,7 +17,6 @@ target_sources(${package_name} PUBLIC FILE_SET CXX_MODULES
 
   FILES
   public/types.cppm
-  public/scanner.cppm
   public/spec.cppm
   detail/detail.cppm
   public/parser.cppm
@@ -27,7 +26,6 @@ target_sources(${package_name} PUBLIC FILE_SET CXX_MODULES
 
 target_sources(${package_name} PRIVATE
   src/types.cpp
-  src/scanner.cpp
   src/spec.cpp
   src/detail.cpp
   src/parser.cpp

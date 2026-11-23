@@ -8,6 +8,8 @@ namespace {
 using detail::ParameterEnvironment;
 using detail::ParameterParser;
 using detail::ParseException;
+using detail::Scanner;
+using detail::ScannerToken;
 
 class Fixture {
   public:

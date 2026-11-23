@@ -1,5 +1,4 @@
 import clap.detail;
-import clap.scanner;
 
 #include "common.hpp"
 #include "klib/unit_test/unit_test.hpp"
@@ -9,6 +8,7 @@ namespace {
 using detail::OptionParser;
 using Iterate = OptionParser::Iterate;
 using detail::ParseException;
+using detail::ScannerToken;
 
 class Fixture {
   public:

@@ -19,10 +19,10 @@ class MockContext : public detail::IContext {
 
 [[nodiscard]] inline auto to_tokens(std::string_view const input) {
 	auto const words = to_words(input);
-	auto ret = std::vector<ScannerToken>{};
+	auto ret = std::vector<detail::ScannerToken>{};
 	ret.reserve(words.size());
-	auto scanner = Scanner{words};
-	auto token = ScannerToken{};
+	auto scanner = detail::Scanner{words};
+	auto token = detail::ScannerToken{};
 	while (scanner.scan_next(token)) {
 		ret.push_back(token);
 	}

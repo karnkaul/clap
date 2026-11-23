@@ -1,9 +1,38 @@
 export module clap.detail;
 
 export import clap.spec;
-export import clap.scanner;
 
 export namespace clap::detail {
+struct ScannerToken {
+	enum class Type : std::int8_t { Eof, String, MinusString, MinusMinusString, MinusMinus };
+
+	Type type{};
+	std::string_view lexeme{};
+};
+
+class Scanner {
+  public:
+	using Token = ScannerToken;
+
+	explicit Scanner(std::span<std::string_view const> words);
+
+	[[nodiscard]] auto at_end() const -> bool { return !m_has_current; }
+
+	auto scan_next(Token& out) -> bool;
+
+  private:
+	auto scan_next() -> Token;
+	auto scan_quoted() -> Token;
+
+	void advance();
+
+	[[nodiscard]] auto to_token(Token::Type type, std::size_t length = 0uz) -> Token;
+
+	std::span<std::string_view const> m_remain{};
+	std::string_view m_current{};
+	bool m_has_current{};
+};
+
 class IContext : public Polymorphic {
   public:
 	virtual void print_help_text() = 0;
