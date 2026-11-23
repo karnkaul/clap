@@ -21,8 +21,7 @@ target_sources(${package_name} PUBLIC FILE_SET CXX_MODULES
   public/spec.cppm
   detail/detail.cppm
   public/parser.cppm
-  # public/clap.cppm
-  # private/detail.cppm
+  public/clap.cppm
   "${CMAKE_CURRENT_BINARY_DIR}/${version_module}"
 )
 
@@ -32,6 +31,5 @@ target_sources(${package_name} PRIVATE
   src/spec.cpp
   src/detail.cpp
   src/parser.cpp
-  # src/clap.cpp
-  # src/detail.cpp
+  src/clap.cpp
 )

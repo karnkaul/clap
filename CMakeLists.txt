@@ -19,7 +19,7 @@ option(CLAP_BUILD_TESTS "Build clap tests" ${PROJECT_IS_TOP_LEVEL})
 add_subdirectory(lib)
 
 if(CLAP_BUILD_EXAMPLES)
-  # add_subdirectory(examples)
+  add_subdirectory(examples)
 endif()
 
 if(CLAP_BUILD_TESTS)
