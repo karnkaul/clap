@@ -1,5 +1,7 @@
 export module clap.parser;
 
+export import clap.spec;
+
 import clap.detail;
 
 export namespace clap {
